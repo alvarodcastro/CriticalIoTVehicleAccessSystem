@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">Edit Vehicle</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">License Plate Number</label>
+                        <input type="text" class="form-control" value="{{ vehicle.plate_number }}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="owner_name" class="form-label">Owner Name</label>
+                        <input type="text" class="form-control" id="owner_name" name="owner_name" 
+                               value="{{ vehicle.owner_name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="is_authorized" 
+                                   name="is_authorized" {% if vehicle.is_authorized %}checked{% endif %}>
+                            <label class="form-check-label" for="is_authorized">Authorized</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valid_from" class="form-label">Valid From</label>
+                        <input type="date" class="form-control" id="valid_from" name="valid_from" 
+                               value="{{ vehicle.valid_from.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valid_until" class="form-label">Valid Until (leave empty for indefinite)</label>
+                        <input type="date" class="form-control" id="valid_until" name="valid_until" 
+                               value="{{ vehicle.valid_until.strftime('%Y-%m-%d') if vehicle.valid_until else '' }}">
+                    </div>
+                    <div class="text-end">
+                        <a href="{{ url_for('main.list_vehicles') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

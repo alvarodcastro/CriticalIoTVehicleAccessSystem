@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>System Dashboard</h2>
+
+<div class="row mt-4">
+    <!-- System Status Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">System Status</h5>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="mb-1">Authorized Vehicles</p>
+                        <h3>{{ vehicle_count }}</h3>
+                    </div>
+                    <i class="bi bi-car-front fs-1 text-primary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gates Status -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Gates Status</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Gate ID</th>
+                                <th>Location</th>
+                                <th>Status</th>
+                                <th>Last Online</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for gate in gates %}
+                            <tr>
+                                <td>{{ gate.gate_id }}</td>
+                                <td>{{ gate.location }}</td>
+                                <td>
+                                    <span class="badge {% if gate.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ gate.status }}
+                                    </span>
+                                </td>
+                                <td>{{ gate.last_online.strftime('%Y-%m-%d %H:%M:%S') if gate.last_online else 'Never' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Access Logs -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Recent Access Logs</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Plate Number</th>
+                                <th>Gate</th>
+                                <th>Access</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ log.plate_number }}</td>
+                                <td>{{ log.gate_id }}</td>
+                                <td>
+                                    <span class="badge {% if log.access_granted %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ 'Granted' if log.access_granted else 'Denied' }}
+                                    </span>
+                                </td>
+                                <td>{{ "%.2f"|format(log.confidence_score) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
