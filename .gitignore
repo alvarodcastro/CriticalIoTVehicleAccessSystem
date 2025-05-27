@@ -38,3 +38,6 @@ Thumbs.db
 *.sqlite3
 *.db
 *.sql
+
+# Docker
+docker/mosquitto/config/pwfile

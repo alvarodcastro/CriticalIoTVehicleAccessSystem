@@ -1,9 +1,14 @@
 import paho.mqtt.client as mqtt
 import json
 from datetime import datetime
-from .database.models import Gate, Vehicle, AccessLog, db
 import base64
 import os
+from dotenv import load_dotenv
+
+try:
+    from .database.models import Gate, Vehicle, AccessLog, db
+except ImportError:
+    print("Database models not found. Ensure you are running this in the correct context.")
 
 # MQTT Topics
 TOPIC_GATE_STATUS = "gate/+/status"
@@ -24,12 +29,14 @@ except ImportError:
 # Global MQTT client
 mqtt_client = None
 
+load_dotenv()
+
 def init_mqtt(app):
     """Initialize MQTT with application context"""
     global mqtt_client
     
     # Get MQTT configuration from environment
-    broker_url = os.getenv('MQTT_BROKER_URL', 'broker.hivemq.com')
+    broker_url = os.getenv('MQTT_BROKER_URL', 'localhost')
     broker_port = int(os.getenv('MQTT_BROKER_PORT', 1883))
     username = os.getenv('MQTT_USERNAME', '')
     password = os.getenv('MQTT_PASSWORD', '')
@@ -56,21 +63,28 @@ def init_mqtt(app):
     except Exception as e:
         print(f"Failed to connect to MQTT broker: {e}")
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties=None):
     """Callback for when the client connects to the broker"""
     if rc == 0:
         print('Connected to MQTT broker')
         client.subscribe(TOPIC_GATE_STATUS)
+        print('Subscribed to gate status topic')
         client.subscribe(TOPIC_GATE_ACCESS)
+        print('Subscribed to gate access topic')
         client.subscribe(TOPIC_GATE_SYNC)
+        print('Subscribed to gate sync topic')
     else:
         print(f'Bad connection. Code: {rc}')
 
 def on_message(client, userdata, message):
     """Callback for when a message is received"""
     try:
+        print(f"Received message on {message.topic}: {message.payload.decode()}")
+
         topic = message.topic
         payload = json.loads(message.payload.decode())
+        
+        print(f"Received message on topic {topic}: {payload}")
         
         # Extract gate_id from topic
         topic_parts = topic.split('/')
@@ -140,6 +154,8 @@ def handle_gate_access(gate_id, payload):
         }
         mqtt_client.publish(response_topic, json.dumps(response))
 
+
+# TODO: complete vehicle list should NOT be sent to the gate
 def handle_gate_sync(gate_id, payload):
     """Handle gate synchronization requests"""
     with mqtt_client.app.app_context():
@@ -163,3 +179,6 @@ def handle_gate_sync(gate_id, payload):
             'timestamp': datetime.utcnow().isoformat()
         }
         mqtt_client.publish(response_topic, json.dumps(response))
+
+if __name__ == "__main__":
+    init_mqtt(None)  # Initialize with dummy app context for testing
