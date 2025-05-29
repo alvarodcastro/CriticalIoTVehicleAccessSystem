@@ -4,6 +4,7 @@ from datetime import datetime
 import base64
 import os
 from dotenv import load_dotenv
+import requests
 
 try:
     from .database.models import Gate, Vehicle, AccessLog, db
@@ -16,20 +17,47 @@ TOPIC_GATE_ACCESS = "gate/+/access"
 TOPIC_GATE_SYNC = "gate/+/sync"
 TOPIC_SERVER_RESPONSE = "server/response/{gate_id}"
 
-# Flag to check if ANPR is available
-ANPR_AVAILABLE = False
-try:
-    import cv2
-    import numpy as np
-    from .anpr import detect_and_recognize
-    ANPR_AVAILABLE = True
-except ImportError:
-    print("ANPR functionality not available - running in basic mode")
+# YOLO API Configuration
+YOLO_API_URL = os.getenv('YOLO_API_URL')
 
 # Global MQTT client
 mqtt_client = None
 
 load_dotenv()
+
+def process_image_with_yolo(image_data, url=None):
+    """
+    Process an image using the YOLO API service
+    
+    Args:
+        image_data (bytes): Raw image data in bytes
+        
+    Returns:
+        tuple: (plate_text, confidence) from the ANPR service
+    """
+    try:
+        if url is None:
+            # Prepare the image file for the request
+            files = {'image': ('image.jpg', image_data, 'image/jpeg')}
+            
+            # Make request to YOLO API
+            response = requests.post(f"{YOLO_API_URL}/api/anpr", files=files)
+        else:
+            # Make request to YOLO API
+            print(f"Processing image from URL: {url}")
+            response = requests.get(f"{YOLO_API_URL}/api/anpr/url", params={'image': url})
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"YOLO API Response: {result}")
+            return result['plate_text'], result['confidence']
+        else:
+            print(f"Error from YOLO API: {response.text}")
+            return 'UNKNOWN', 0.0
+               
+    except Exception as e:
+        print(f"Error processing image with YOLO API: {e}")
+        return 'UNKNOWN', 0.0
 
 def init_mqtt(app):
     """Initialize MQTT with application context"""
@@ -79,12 +107,11 @@ def on_connect(client, userdata, flags, rc, properties=None):
 def on_message(client, userdata, message):
     """Callback for when a message is received"""
     try:
-        print(f"Received message on {message.topic}: {message.payload.decode()}")
-
         topic = message.topic
-        payload = json.loads(message.payload.decode())
-        
-        print(f"Received message on topic {topic}: {payload}")
+        payload = json.loads(message.payload.decode("utf-8"))
+
+        print(f"Received message on {topic}")
+
         
         # Extract gate_id from topic
         topic_parts = topic.split('/')
@@ -97,10 +124,13 @@ def on_message(client, userdata, message):
         # Create app context for database operations
         with client.app.app_context():
             if action == 'status':
+                print(f"Handling gate status for gate {gate_id}")
                 handle_gate_status(gate_id, payload)
             elif action == 'access':
+                print(f"Handling gate access for gate {gate_id}")
                 handle_gate_access(gate_id, payload)
             elif action == 'sync':
+                print(f"Handling gate sync for gate {gate_id}")
                 handle_gate_sync(gate_id, payload)
     except Exception as e:
         print(f"Error processing message: {e}")
@@ -114,19 +144,18 @@ def handle_gate_status(gate_id, payload):
             gate.last_online = datetime.utcnow()
             db.session.commit()
 
-def handle_gate_access(gate_id, payload):
+def handle_gate_access(gate_id, payload, url=None):
     """Handle access requests from gates"""
     with mqtt_client.app.app_context():
-        if ANPR_AVAILABLE:
-            # ANPR processing
+        # Process image with YOLO API
+        image_data = None
+        if url is None:
+            # Decode base64 image data
             image_data = base64.b64decode(payload['image'])
-            nparr = np.frombuffer(image_data, np.uint8)
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            processed_image, plate_text, confidence = detect_and_recognize(image)
-        else:
-            # Fallback mode - use provided plate number if available
-            plate_text = payload.get('plate_number', 'UNKNOWN')
-            confidence = 1.0 if plate_text != 'UNKNOWN' else 0.0
+        
+        plate_text, confidence = process_image_with_yolo(image_data, url=url)
+        print(f"Detected plate: {plate_text} with confidence: {confidence}")
+
 
         # Check authorization
         is_authorized = False
@@ -145,6 +174,7 @@ def handle_gate_access(gate_id, payload):
         db.session.commit()
 
         # Send response back to gate
+        print(f"Sending response to gate {gate_id}: {is_authorized}")
         response_topic = TOPIC_SERVER_RESPONSE.format(gate_id=gate_id)
         response = {
             'plate_number': plate_text,
@@ -154,8 +184,8 @@ def handle_gate_access(gate_id, payload):
         }
         mqtt_client.publish(response_topic, json.dumps(response))
 
-
 # TODO: complete vehicle list should NOT be sent to the gate
+# TODO: sync should be done periodically accessing to cloud service
 def handle_gate_sync(gate_id, payload):
     """Handle gate synchronization requests"""
     with mqtt_client.app.app_context():
@@ -179,6 +209,3 @@ def handle_gate_sync(gate_id, payload):
             'timestamp': datetime.utcnow().isoformat()
         }
         mqtt_client.publish(response_topic, json.dumps(response))
-
-if __name__ == "__main__":
-    init_mqtt(None)  # Initialize with dummy app context for testing
