@@ -2,10 +2,6 @@ import unittest
 from app import create_app, db
 from app.database.models import Vehicle, AccessLog, Gate, User
 from datetime import datetime, timedelta
-import os
-import cv2
-import numpy as np
-import io
 
 class TestANPRSystem(unittest.TestCase):
     def setUp(self):
