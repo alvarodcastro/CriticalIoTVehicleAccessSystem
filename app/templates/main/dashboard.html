@@ -8,13 +8,26 @@
     <div class="col-md-4">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">System Status</h5>
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="mb-1">Authorized Vehicles</p>
-                        <h3>{{ vehicle_count }}</h3>
+                <h5 class="card-title">System Stats</h5>
+                <div class="row justify-content-between align-items-center">
+                    <div class="col-12 col-md-6">
+                        <h6 class="mb-1">Authorized Vehicles</h6>
                     </div>
-                    <i class="bi bi-car-front fs-1 text-primary"></i>
+                    <div class="col-12 col-md-6">
+                        <h6 class="text-end">{{ stats['total_vehicles'] }}</h6>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <h6 class="mb-1">Successful attemps today</h6>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <h6 class="text-end">{{ stats['successful_attempts_today'] }} / {{ stats['total_attempts_today'] }}</h6>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <h6 class="mb-1">Online Gates</h6>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <h6 class="text-end">{{ stats['online_gates'] }} / {{ stats['total_gates'] }}</h6>
+                    </div>
                 </div>
             </div>
         </div>
@@ -41,11 +54,13 @@
                                 <td>{{ gate.gate_id }}</td>
                                 <td>{{ gate.location }}</td>
                                 <td>
-                                    <span class="badge {% if gate.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
+                                    <span
+                                        class="badge {% if gate.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
                                         {{ gate.status }}
                                     </span>
                                 </td>
-                                <td>{{ gate.last_online.strftime('%Y-%m-%d %H:%M:%S') if gate.last_online else 'Never' }}</td>
+                                <td>{{ gate.last_online.strftime('%Y-%m-%d %H:%M:%S') if gate.last_online else 'Never'
+                                    }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -80,7 +95,8 @@
                                 <td>{{ log.plate_number }}</td>
                                 <td>{{ log.gate_id }}</td>
                                 <td>
-                                    <span class="badge {% if log.access_granted %}bg-success{% else %}bg-danger{% endif %}">
+                                    <span
+                                        class="badge {% if log.access_granted %}bg-success{% else %}bg-danger{% endif %}">
                                         {{ 'Granted' if log.access_granted else 'Denied' }}
                                     </span>
                                 </td>
