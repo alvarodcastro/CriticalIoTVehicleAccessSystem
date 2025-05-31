@@ -17,8 +17,9 @@ An IoT-based access control system using Automatic Number Plate Recognition (ANP
 - Python 3.8+
 - ESP32 with camera module
 - Raspberry Pi (or similar) for main server
+- Google Cloud Platform account with BigQuery enabled
 - Network connectivity (WiFi/Ethernet)
-- Camera with night vision capability
+- Camera with motion detection
 
 ## Installation
 
@@ -39,14 +40,24 @@ pip install -r requirements.txt
 - Place your trained YOLO model (`best.pt`) in the `app/models` directory
 - The model should be trained for license plate detection
 
-4. Initialize the database:
-```bash
-flask db init
-flask db migrate
-flask db upgrade
-```
+4. Configure Google Cloud credentials:
+- Create a new project in Google Cloud Console
+- Enable BigQuery API
+- Create a service account and download the JSON key file
+- Set the environment variable:
+  ```bash
+  export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account-key.json"
+  ```
 
-5. Configure the ESP32:
+5. Set up BigQuery:
+- Create a new dataset in BigQuery
+- Update the BigQuery configuration in `app/config.py`:
+  ```python
+  BIGQUERY_PROJECT_ID = 'your-project-id'
+  BIGQUERY_DATASET = 'your-dataset-name'
+  ```
+
+6. Configure the ESP32:
 - Upload the ESP32 code to your device
 - Update WiFi credentials and server URL in the ESP32 code
 - Connect the gate control mechanism to the specified pins
