@@ -4,6 +4,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Google credentials
+iot2-final-project-credentials.json
+
 # Logs
 logs/
 *.log
