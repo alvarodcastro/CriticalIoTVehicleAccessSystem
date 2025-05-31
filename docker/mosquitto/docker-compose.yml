@@ -3,8 +3,11 @@ version: "3.7"
 services:
   # mqtt5 eclipse-mosquitto
   mqtt5:
-    image: eclipse-mosquitto
+    image: eclipse-mosquitto:2.0.18
     container_name: mqtt5
+    build:
+      context: .
+      dockerfile: docker/mosquitto/Dockerfile
     ports:
       - "1883:1883" #default mqtt port
       - "9001:9001" #default mqtt port for websockets
