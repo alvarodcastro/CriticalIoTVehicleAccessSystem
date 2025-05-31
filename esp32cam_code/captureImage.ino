@@ -7,10 +7,8 @@
 #include <base64.h>
 
 // WiFi Settings
-//#define WIFI_SSID "ESP32_AP"
-//#define WIFI_PASS "mah-iot2"
-#define WIFI_SSID "DIGIFIBRA-3FB4"
-#define WIFI_PASS "4DK7AKA3CD"
+#define WIFI_SSID "ESP32_AP"
+#define WIFI_PASS "mah-iot2"
 
 // Telegram Settings
 #define BOT_TOKEN "7422198409:AAFH1EwZvidiSG6PASmMJjbsyOqx4_bLfsI"
