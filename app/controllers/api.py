@@ -1,11 +1,13 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
-from ..database.models import Vehicle, AccessLog, Gate, db
+from ..database.models import Vehicle, AccessLog, Gate
 from datetime import datetime
 import cv2
 import numpy as np
 from ..anpr import detect_and_recognize
 from ..mqtt_handler import mqtt_client as mqtt
+from .. import db
+from google.cloud import bigquery
 
 api_bp = Blueprint('api', __name__)
 
@@ -25,24 +27,23 @@ def check_access():
     
     # Use ANPR to detect plate
     processed_image, plate_text, confidence = detect_and_recognize(img)
-    
-    # Check if vehicle is authorized
-    vehicle = Vehicle.query.filter_by(plate_number=plate_text).first()
+      # Check if vehicle is authorized
+    vehicle_data = db.get_vehicle_by_plate(plate_text)
     is_authorized = False
     
-    if vehicle and vehicle.is_authorized:
-        if vehicle.valid_until is None or vehicle.valid_until > datetime.utcnow():
-            is_authorized = True
+    if vehicle_data:
+        vehicle = Vehicle(vehicle_data)
+        if vehicle.is_authorized:
+            if vehicle.valid_until is None or vehicle.valid_until > datetime.utcnow():
+                is_authorized = True
     
     # Log the access attempt
-    access_log = AccessLog(
+    success = db.create_access_log(
         plate_number=plate_text,
+        gate_id=gate_id,
         access_granted=is_authorized,
-        confidence_score=confidence,
-        gate_id=gate_id
+        confidence_score=confidence
     )
-    db.session.add(access_log)
-    db.session.commit()
     
     return jsonify({
         'plate_number': plate_text,
@@ -58,20 +59,19 @@ def sync_vehicles():
     if not gate_id:
         return jsonify({'error': 'Gate ID required'}), 400
         
-    gate = Gate.query.filter_by(gate_id=gate_id).first()
+    gate = db.get_gate(gate_id)
     if not gate:
         return jsonify({'error': 'Gate not found'}), 404
     
     # Get authorized vehicles
-    vehicles = Vehicle.query.filter_by(is_authorized=True).all()
+    vehicles_data = db.get_authorized_vehicles()
     vehicle_list = [{
         'plate_number': v.plate_number,
         'valid_until': v.valid_until.isoformat() if v.valid_until else None
-    } for v in vehicles]
+    } for v in [Vehicle(v) for v in vehicles_data]]
     
     # Update gate sync time
-    gate.local_cache_updated = datetime.utcnow()
-    db.session.commit()
+    db.update_gate_status(gate_id, gate.status, datetime.utcnow())
     
     # Publish to MQTT topic
     response = {
@@ -87,7 +87,9 @@ def sync_vehicles():
 @login_required
 def list_gates():
     """Get list of all gates and their status"""
-    gates = Gate.query.all()
+    query = f"SELECT * FROM `{db.get_table_ref('Gate')}`"
+    gates_data = list(db.client.query(query).result())
+    gates = [Gate(g) for g in gates_data]
     return jsonify([{
         'id': g.id,
         'gate_id': g.gate_id,
@@ -106,16 +108,37 @@ def get_access_logs():
     end_date = request.args.get('end_date')
     limit = request.args.get('limit', 100, type=int)
     
-    query = AccessLog.query
+    # Construct query with filters
+    query = f"""
+        SELECT * FROM `{db.get_table_ref('AccessLog')}`
+        WHERE 1=1
+        {f"AND gate_id = @gate_id" if gate_id else ""}
+        {f"AND timestamp >= @start_date" if start_date else ""}
+        {f"AND timestamp <= @end_date" if end_date else ""}
+        ORDER BY timestamp DESC
+        LIMIT @limit
+    """
     
+    # Set up query parameters
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("limit", "INTEGER", limit)
+        ]
+    )
     if gate_id:
-        query = query.filter_by(gate_id=gate_id)
+        job_config.query_parameters.append(
+            bigquery.ScalarQueryParameter("gate_id", "STRING", gate_id)
+        )
     if start_date:
-        query = query.filter(AccessLog.timestamp >= start_date)
+        job_config.query_parameters.append(
+            bigquery.ScalarQueryParameter("start_date", "TIMESTAMP", start_date)
+        )
     if end_date:
-        query = query.filter(AccessLog.timestamp <= end_date)
-        
-    logs = query.order_by(AccessLog.timestamp.desc()).limit(limit).all()
+        job_config.query_parameters.append(
+            bigquery.ScalarQueryParameter("end_date", "TIMESTAMP", end_date)
+        )
+    
+    logs_data = list(db.client.query(query, job_config=job_config).result())
     
     return jsonify([{
         'id': log.id,
@@ -131,7 +154,7 @@ def get_access_logs():
 @login_required
 def manual_override(gate_id):
     """Manually trigger gate operation"""
-    gate = Gate.query.filter_by(gate_id=gate_id).first()
+    gate = db.get_gate(gate_id)
     if not gate:
         return jsonify({'error': 'Gate not found'}), 404
     
@@ -140,16 +163,14 @@ def manual_override(gate_id):
     mqtt.publish(topic, {'action': 'open'})
     
     # Log the manual override
-    log = AccessLog(
+    success = db.create_access_log(
         plate_number='MANUAL_OVERRIDE',
         gate_id=gate_id,
         access_granted=True,
         confidence_score=1.0
     )
-    db.session.add(log)
-    db.session.commit()
     
-    return jsonify({'status': 'success'})
+    return jsonify({'status': 'success' if success else 'error'})
 
 @api_bp.route('/api/gate_status', methods=['POST'])
 def update_gate_status():
@@ -161,11 +182,17 @@ def update_gate_status():
     if not gate_id or not status:
         return jsonify({'error': 'Missing required fields'}), 400
         
-    gate = Gate.query.filter_by(gate_id=gate_id).first()
+    gate = db.get_gate(gate_id)
     if gate:
-        gate.status = status
-        gate.last_online = datetime.utcnow()
-        db.session.commit()
-        return jsonify({'status': 'success'})
+        success = db.update_gate_status(gate_id, status, datetime.utcnow())
+        return jsonify({'status': 'success' if success else 'error'})
     
-    return jsonify({'error': 'Gate not found'}), 404
+    # If gate doesn't exist, create it
+    table_ref = db.get_table_ref('Gate')
+    rows_to_insert = [{
+        'gate_id': gate_id,
+        'status': status,
+        'last_online': datetime.utcnow().isoformat()
+    }]
+    errors = db.client.insert_rows_json(table_ref, rows_to_insert)
+    return jsonify({'status': 'success' if not errors else 'error'})
