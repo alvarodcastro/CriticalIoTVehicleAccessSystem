@@ -7,8 +7,10 @@
 #include <base64.h>
 
 // WiFi Settings
-#define WIFI_SSID "ESP32_AP"
-#define WIFI_PASS "mah-iot2"
+//#define WIFI_SSID "ESP32_AP"
+//#define WIFI_PASS "mah-iot2"
+#define WIFI_SSID "DIGIFIBRA-3FB4"
+#define WIFI_PASS "4DK7AKA3CD"
 
 // Telegram Settings
 #define BOT_TOKEN "7422198409:AAFH1EwZvidiSG6PASmMJjbsyOqx4_bLfsI"
@@ -27,19 +29,20 @@ EloquentSurveillance::Motion motion;
 EloquentSurveillance::TelegramChat chat(BOT_TOKEN, CHAT_ID);
 
 // MQTT Client
-#define MQTT_SERVER "192.168.50.1"
+//#define MQTT_SERVER "192.168.50.1"
+#define MQTT_SERVER "192.168.1.133"
 #define MQTT_USER "mqtt_iot2"
 #define MQTT_PASS "mah-iot2"
 
 String DEVICE_ID;
-String DEVICE_MAC;
 
 WiFiClient wClient;
 PubSubClient mqtt_client(wClient);
 
-String TOPIC_CONNECTION = "conexion";
-String TOPIC_NOTIFY_PICTURE = "picture/notify";
+String TOPIC_STATUS;
 String TOPIC_SEND_PICTURE;
+String TOPIC_SERVER_RESPONSE;
+String TOPIC_NOTIFY_PICTURE = "picture/notify";
 String TOPIC_NOTIFY_MOTION_DETECTED = "motion/notify";
 
 void debug(String level, String message)
@@ -74,15 +77,31 @@ void start_mqtt_connection()
   {
     debug("INFO", "Attempting MQTT connection...");
 
-    if (mqtt_client.connect(DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS, TOPIC_CONNECTION.c_str(), 1, true, "Dispositivo desconectado"))
+    // Last Will
+    JsonDocument lwtDoc;
+    lwtDoc["status"] = "offline";
+    String lwtPayload;
+    serializeJson(lwtDoc, lwtPayload);
+
+    if (mqtt_client.connect(DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS, TOPIC_STATUS.c_str(), 1, true, lwtPayload.c_str()))
     {
       debug("INFO", "Connected to broker " + String(MQTT_SERVER));
-      mqtt_client.publish(TOPIC_CONNECTION.c_str(), "Dispositivo conectado a MQTT correctamente.", false);
+
+      // Publishing device status
+      JsonDocument doc;
+      doc["status"] = "online";
+      String jsonPayload;
+      serializeJson(doc, jsonPayload);
+
+      mqtt_client.publish(TOPIC_STATUS.c_str(), jsonPayload.c_str(), false);
+      debug("INFO", "Published status: " + jsonPayload);
+
+      // Suscribing to topic
+      mqtt_client.subscribe(TOPIC_SERVER_RESPONSE.c_str());
     }
     else
     {
       debug("ERROR", String(mqtt_client.state()) + " reintento en 5s");
-      // Wait 5 seconds before retrying
       delay(5000);
     }
   }
@@ -91,9 +110,29 @@ void start_mqtt_connection()
 void mqtt_handle_message(char *topic, byte *payload, unsigned int length)
 {
   String msg = "";
-  for (int i = 0; i < length; i++)
-    msg += (char)payload[i];
+  for (int i = 0; i < length; i++) msg += (char)payload[i];
   debug("Received message", msg);
+
+  JsonDocument json;
+
+  if (String(topic) == TOPIC_SERVER_RESPONSE) {
+    DeserializationError error = deserializeJson(json, msg);
+    
+    if (error) 
+      debug("ERROR", String(error.c_str()));
+    else if (json.containsKey("access_granted") && json.containsKey("plate_number")) {
+      bool open_gate = json["access_granted"];
+      String plate_number = String(json["plate_number"]);
+
+      debug("OPEN GATE VALUE", open_gate);
+
+      if (open_gate) {
+        debug("INFO", "Access granted to " + plate_number); 
+      } else {
+        debug("INFO", "Access denied");
+      }
+    }
+  }
 }
 
 void sendPictureOverMQTT()
@@ -139,7 +178,7 @@ void sendPictureOverMQTT()
   mqtt_client.publish(TOPIC_NOTIFY_MOTION_DETECTED.c_str(), "Motion detected!", false);
 
   // Envía el payload JSON con la imagen en Base64
-  debug("INFO", "Enviando al topic " + String(TOPIC_SEND_PICTURE));
+  debug("INFO", "Sending image through MQTT " + String(TOPIC_SEND_PICTURE));
   debug("INFO", payloadJson.c_str());
   mqtt_client.publish(TOPIC_SEND_PICTURE.c_str(), payloadJson.c_str(), false);
 
@@ -239,6 +278,12 @@ void scanNetworks()
   }
 }
 
+void build_topics(String device_mac) {
+  TOPIC_STATUS = "gate/" + device_mac + "/status";
+  TOPIC_SEND_PICTURE = "gate/" + device_mac + "/access";
+  TOPIC_SERVER_RESPONSE = "server/response/" + device_mac;
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -273,9 +318,8 @@ void setup()
 
   start_wifi_connection();
   DEVICE_ID = String(WiFi.getHostname());
-  DEVICE_MAC = String(WiFi.macAddress());
-  TOPIC_SEND_PICTURE = "gate/" + DEVICE_MAC + "/access";
-  debug("INFO", String(TOPIC_SEND_PICTURE));
+  String device_mac = String(WiFi.macAddress());
+  build_topics(device_mac);
   mqtt_client.setServer(MQTT_SERVER, 1883);
   mqtt_client.setBufferSize(51200);
   mqtt_client.setCallback(mqtt_handle_message);
@@ -289,7 +333,6 @@ void loop()
   mqtt_client.loop();
   server.handleClient();
 
-  // Captura periódica para detección de movimiento
   if (!camera.capture())
   {
     debug("ERROR", camera.getErrorMessage());
@@ -305,7 +348,6 @@ void loop()
   {
     debug("INFO", "Motion detected! Taking a picture...");
 
-    // Activa el flash
     digitalWrite(FLASH_PIN, HIGH);
     delay(100);
 
@@ -322,7 +364,6 @@ void loop()
       debug("TELEGRAM PHOTO", photoResponse ? "OK" : "ERR");
     }
 
-    // Apaga el flash después de la captura
     digitalWrite(FLASH_PIN, LOW);
   }
   else if (!motion.isOk())
