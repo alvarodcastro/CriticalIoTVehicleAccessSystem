@@ -122,42 +122,72 @@ class BigQueryDB:
         except Exception as e:
             return False, str(e)
 
-    def get_paginated_access_logs(self, page=1, per_page=20):
-        """Get access logs with pagination"""
-        try:
-            offset = (page - 1) * per_page
-            
-            # Get total count
-            count_query = f"""
-            SELECT COUNT(*) as total
-            FROM `{self.get_table_ref('AccessLog')}`
-            """
-            total = next(self.client.query(count_query).result()).total
-            
-            # Get paginated logs
-            logs_query = f"""
-            SELECT *
-            FROM `{self.get_table_ref('AccessLog')}`
-            ORDER BY timestamp DESC
-            LIMIT @limit
-            OFFSET @offset
-            """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("limit", "INTEGER", per_page),
-                    bigquery.ScalarQueryParameter("offset", "INTEGER", offset)
-                ]
+    def get_paginated_access_logs(self, page=1, per_page=20, sort_by='timestamp', sort_order='desc'):
+        """Get paginated access logs with sorting"""
+        # Calculate offset
+        offset = (page - 1) * per_page
+
+        # Validate sort parameters
+        allowed_sort_fields = {'timestamp': 'timestamp', 'access_granted': 'access_granted'}
+        sort_field = allowed_sort_fields.get(sort_by, 'timestamp')
+        order = 'DESC' if sort_order.lower() == 'desc' else 'ASC'
+
+        # Get total count
+        count_query = f"SELECT COUNT(*) as total FROM `{self.get_table_ref('AccessLog')}`"
+        total_count = next(self.client.query(count_query).result()).total
+
+        # Get paginated and sorted results
+        query = f"""
+        SELECT *
+        FROM `{self.get_table_ref('AccessLog')}`
+        ORDER BY {sort_field} {order}
+        LIMIT @per_page
+        OFFSET @offset
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("per_page", "INT64", per_page),
+                bigquery.ScalarQueryParameter("offset", "INT64", offset)
+            ]
+        )
+        
+        results = list(self.client.query(query, job_config=job_config).result())
+        
+        # Calculate pagination metadata
+        total_pages = -(-total_count // per_page)  # Ceiling division
+        has_prev = page > 1
+        has_next = page < total_pages
+
+        # Create Pagination object
+        pagination = {
+            'items': results,
+            'page': page,
+            'per_page': per_page,
+            'total': total_count,
+            'pages': total_pages,
+            'has_prev': has_prev,
+            'has_next': has_next,
+            'prev_num': page - 1 if has_prev else None,
+            'next_num': page + 1 if has_next else None,
+            'iter_pages': lambda left_edge=2, left_current=2, right_current=3, right_edge=2: self._iter_pages(
+                page, total_pages, left_edge, left_current, right_current, right_edge
             )
-            logs_data = list(self.client.query(logs_query, job_config=job_config).result())
-            
-            return {
-                'logs': logs_data,
-                'total': total,
-                'page': page,
-                'per_page': per_page
-            }
-        except Exception as e:
-            return None
+        }
+        
+        return type('Pagination', (), pagination)  # Create object with pagination attributes
+
+    def _iter_pages(self, curr_page, num_pages, left_edge=2, left_current=2, right_current=3, right_edge=2):
+        """Helper function to generate page numbers for pagination"""
+        last = 0
+        for num in range(1, num_pages + 1):
+            if num <= left_edge or \
+               (num > curr_page - left_current - 1 and num < curr_page + right_current) or \
+               num > num_pages - right_edge:
+                if last + 1 != num:
+                    yield None
+                yield num
+                last = num
 
     # AccessLog operations
     def create_access_log(self, plate_number, gate_id, access_granted, confidence_score=None):

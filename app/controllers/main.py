@@ -97,15 +97,31 @@ def edit_vehicle(plate_number):
 @login_required
 def access_logs():
     page = request.args.get('page', 1, type=int)
-    per_page = 20
-    result = db.get_paginated_access_logs(page, per_page)
-    if result is None:
+    per_page = request.args.get('per_page', 10, type=int)
+    sort_by = request.args.get('sort', 'timestamp')
+    sort_order = request.args.get('order', 'desc')
+    
+    # Validate and constrain per_page to allowed values
+    allowed_per_page = [10, 30, 50]
+    if per_page not in allowed_per_page:
+        per_page = 10
+        
+    # Validate sort parameters
+    allowed_sort_fields = ['timestamp', 'access_granted']
+    if sort_by not in allowed_sort_fields:
+        sort_by = 'timestamp'
+    if sort_order not in ['asc', 'desc']:
+        sort_order = 'desc'
+    
+    pagination_obj = db.get_paginated_access_logs(page, per_page, sort_by, sort_order)
+    
+    if pagination_obj is None:
         flash('Error retrieving access logs', 'error')
         return redirect(url_for('main.dashboard'))
     
-    logs = [AccessLog(log) for log in result['logs']]
-    pagination = Pagination(logs, result['page'], result['per_page'], result['total'])
-    return render_template('main/access_logs.html', logs=pagination)
+    # The items are directly available in the pagination object
+    pagination_obj.items = [AccessLog(log) for log in pagination_obj.items]
+    return render_template('main/access_logs.html', logs=pagination_obj)
 
 @main_bp.route('/gates', methods=['GET'])
 @login_required
