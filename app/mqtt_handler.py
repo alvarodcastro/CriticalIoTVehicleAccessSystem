@@ -6,10 +6,8 @@ import os
 from dotenv import load_dotenv
 import requests
 
-try:
-    from .database.models import Gate, Vehicle, AccessLog, db
-except ImportError:
-    print("Database models not found. Ensure you are running this in the correct context.")
+from .database.models import Gate, Vehicle, AccessLog
+from . import db
 
 # MQTT Topics
 TOPIC_GATE_STATUS = "gate/+/status"
@@ -62,6 +60,10 @@ def process_image_with_yolo(image_data, url=None):
 def init_mqtt(app):
     """Initialize MQTT with application context"""
     global mqtt_client
+    
+    # Check if we're in the reloader process
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        return
     
     # Get MQTT configuration from environment
     broker_url = os.getenv('MQTT_BROKER_URL', 'localhost')
@@ -138,11 +140,26 @@ def on_message(client, userdata, message):
 def handle_gate_status(gate_id, payload):
     """Handle gate status updates"""
     with mqtt_client.app.app_context():
-        gate = Gate.query.filter_by(gate_id=gate_id).first()
+        gate = db.get_gate(gate_id)
+        print(payload.get('status', 'offline'))
+        print(f"Gate {gate}")
         if gate:
-            gate.status = payload.get('status', 'offline')
-            gate.last_online = datetime.utcnow()
-            db.session.commit()
+            success = db.update_gate_status(
+                gate_id=gate_id,
+                status=payload.get('status', 'offline'),
+                last_online=datetime.utcnow()
+            )
+            if success:
+                print(f"Gate {gate_id} status updated successfully")
+            else:
+                print(f"Failed to update gate {gate_id} status")
+        else: 
+            print(f"Gate {gate_id} not found, creating new gate")
+            success, errors = db.add_gate(gate_id, payload.get('location', 'Unknown'))
+            if success:
+                print(f"Gate {gate_id} created successfully")
+            else:
+                print(f"Error creating gate {gate_id}: {errors}")
 
 def handle_gate_access(gate_id, payload, url=None):
     """Handle access requests from gates"""
@@ -154,24 +171,21 @@ def handle_gate_access(gate_id, payload, url=None):
             image_data = base64.b64decode(payload['image'])
         
         plate_text, confidence = process_image_with_yolo(image_data, url=url)
-        print(f"Detected plate: {plate_text} with confidence: {confidence}")
-
-
-        # Check authorization
+        print(f"Detected plate: {plate_text} with confidence: {confidence}")        # Check authorization
         is_authorized = False
-        vehicle = Vehicle.query.filter_by(plate_number=plate_text).first()
-        if vehicle and vehicle.is_authorized and vehicle.is_currently_valid():
-            is_authorized = True
+        vehicle_data = db.get_vehicle_by_plate(plate_text)
+        if vehicle_data:
+            vehicle = Vehicle(vehicle_data)
+            if vehicle.is_authorized and vehicle.is_currently_valid():
+                is_authorized = True
 
         # Log access attempt
-        log = AccessLog(
+        success = db.create_access_log(
             plate_number=plate_text,
             gate_id=gate_id,
             access_granted=is_authorized,
             confidence_score=confidence
         )
-        db.session.add(log)
-        db.session.commit()
 
         # Send response back to gate
         print(f"Sending response to gate {gate_id}: {is_authorized}")
@@ -190,22 +204,18 @@ def handle_gate_sync(gate_id, payload):
     """Handle gate synchronization requests"""
     with mqtt_client.app.app_context():
         # Get all authorized vehicles
-        vehicles = Vehicle.query.filter_by(is_authorized=True).all()
+        vehicles_data = db.get_authorized_vehicles()
         vehicle_list = [{
-            'plate_number': v.plate_number,
-            'valid_until': v.valid_until.isoformat() if v.valid_until else None
-        } for v in vehicles]
+            'plate_number': Vehicle(v).plate_number,
+            'valid_until': Vehicle(v).valid_until.isoformat() if Vehicle(v).valid_until else None
+        } for v in vehicles_data]
 
         # Update gate sync time
-        gate = Gate.query.filter_by(gate_id=gate_id).first()
-        if gate:
-            gate.local_cache_updated = datetime.utcnow()
-            db.session.commit()
-
-        # Send response
-        response_topic = TOPIC_SERVER_RESPONSE.format(gate_id=gate_id)
-        response = {
-            'vehicles': vehicle_list,
-            'timestamp': datetime.utcnow().isoformat()
-        }
-        mqtt_client.publish(response_topic, json.dumps(response))
+        if db.sync_gate(gate_id):
+            # Send response
+            response_topic = TOPIC_SERVER_RESPONSE.format(gate_id=gate_id)
+            response = {
+                'vehicles': vehicle_list,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            mqtt_client.publish(response_topic, json.dumps(response))
