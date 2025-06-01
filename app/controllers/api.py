@@ -2,53 +2,53 @@ from flask import Blueprint, request, jsonify
 from flask_login import login_required
 from ..database.models import Vehicle, AccessLog, Gate, db
 from datetime import datetime
-import cv2
-import numpy as np
-from ..anpr import detect_and_recognize
+# import cv2
+# import numpy as np
+# from ..anpr import detect_and_recognize
 from ..mqtt_handler import mqtt_client as mqtt
 
 api_bp = Blueprint('api', __name__)
 
-@api_bp.route('/api/check_access', methods=['POST'])
-def check_access():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+# @api_bp.route('/api/check_access', methods=['POST'])
+# def check_access():
+#     if 'image' not in request.files:
+#         return jsonify({'error': 'No image provided'}), 400
     
-    gate_id = request.form.get('gate_id')
-    if not gate_id:
-        return jsonify({'error': 'No gate_id provided'}), 400
+#     gate_id = request.form.get('gate_id')
+#     if not gate_id:
+#         return jsonify({'error': 'No gate_id provided'}), 400
 
-    # Process the image
-    image_file = request.files['image']
-    img_array = np.frombuffer(image_file.read(), np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+#     # Process the image
+#     image_file = request.files['image']
+#     img_array = np.frombuffer(image_file.read(), np.uint8)
+#     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
     
-    # Use ANPR to detect plate
-    processed_image, plate_text, confidence = detect_and_recognize(img)
+#     # Use ANPR to detect plate
+#     processed_image, plate_text, confidence = detect_and_recognize(img)
     
-    # Check if vehicle is authorized
-    vehicle = Vehicle.query.filter_by(plate_number=plate_text).first()
-    is_authorized = False
+#     # Check if vehicle is authorized
+#     vehicle = Vehicle.query.filter_by(plate_number=plate_text).first()
+#     is_authorized = False
     
-    if vehicle and vehicle.is_authorized:
-        if vehicle.valid_until is None or vehicle.valid_until > datetime.utcnow():
-            is_authorized = True
+#     if vehicle and vehicle.is_authorized:
+#         if vehicle.valid_until is None or vehicle.valid_until > datetime.utcnow():
+#             is_authorized = True
     
-    # Log the access attempt
-    access_log = AccessLog(
-        plate_number=plate_text,
-        access_granted=is_authorized,
-        confidence_score=confidence,
-        gate_id=gate_id
-    )
-    db.session.add(access_log)
-    db.session.commit()
+#     # Log the access attempt
+#     access_log = AccessLog(
+#         plate_number=plate_text,
+#         access_granted=is_authorized,
+#         confidence_score=confidence,
+#         gate_id=gate_id
+#     )
+#     db.session.add(access_log)
+#     db.session.commit()
     
-    return jsonify({
-        'plate_number': plate_text,
-        'access_granted': is_authorized,
-        'confidence': confidence
-    })
+#     return jsonify({
+#         'plate_number': plate_text,
+#         'access_granted': is_authorized,
+#         'confidence': confidence
+#     })
 
 @api_bp.route('/api/sync_vehicles')
 @login_required
