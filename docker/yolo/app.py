@@ -11,7 +11,7 @@ import os
 
 # Initialize models
 model = YOLO("./models/best.pt")
-ocr = PaddleOCR(use_angle_cls=True, lang="en")
+
 
 # Initialize Flask
 app = Flask(__name__)
@@ -63,6 +63,8 @@ def detect_and_recognize(image):
 
     # YOLO detection
     results = model.predict(source=image, save=False)
+    if not results or len(results) == 0 or len(results[0].boxes.data) == 0:
+        return original_image, detected_text, confidence_score
     detections = results[0].boxes.data
 
     if len(detections) == 0:
@@ -74,10 +76,18 @@ def detect_and_recognize(image):
 
         # Extract plate region
         plate_image = image[y1:y2, x1:x2]
+        if plate_image.size == 0:
+            continue
 
         # OCR on plate region
-        ocr_result = ocr.ocr(plate_image, cls=True)
-        detected_text, confidence_score = extract_license_plate(ocr_result)
+        try:
+            ocr = PaddleOCR(use_angle_cls=True, lang="en")
+            ocr_result = ocr.ocr(plate_image, cls=True)
+            detected_text, confidence_score = extract_license_plate(ocr_result)
+        except Exception as e:
+            print(f"Error during OCR: {e}")
+            continue
+
 
         if detected_text != "No plate detected":
             # Draw bounding box and text
