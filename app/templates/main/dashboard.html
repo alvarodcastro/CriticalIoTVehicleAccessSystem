@@ -34,7 +34,7 @@
     </div>
 
     <!-- Gates Status -->
-    <div class="col-md-8">
+    <div class="col-md-8 mt-2 mt-md-0">
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Gates Status</h5>
@@ -56,7 +56,7 @@
                                 <td>
                                     <span
                                         class="badge {% if gate.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
-                                        {{ gate.status }}
+                                        {{ gate.status.capitalize() }}
                                     </span>
                                 </td>
                                 <td>{{ gate.last_online.strftime('%Y-%m-%d %H:%M:%S') if gate.last_online else 'Never'
@@ -72,7 +72,7 @@
 </div>
 
 <!-- Recent Access Logs -->
-<div class="row mt-4">
+<div class="row mt-2 mt-md-4">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
