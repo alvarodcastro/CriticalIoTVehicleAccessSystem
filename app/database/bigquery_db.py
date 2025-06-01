@@ -305,18 +305,18 @@ class BigQueryDB:
         except Exception as e:
             return False
 
-    def sync_gate(self, id):
+    def sync_gate(self, gate_id):
         """Update gate's local_cache_updated timestamp"""
         try:
             update_query = f"""
             UPDATE `{self.get_table_ref('Gate')}`
             SET local_cache_updated = @local_cache_updated
-            WHERE id = @id
+            WHERE gate_id = @gate_id
             """
             job_config = bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter("local_cache_updated", "DATETIME", datetime.utcnow().isoformat()),
-                    bigquery.ScalarQueryParameter("id", "STRING", id)
+                    bigquery.ScalarQueryParameter("gate_id", "STRING", gate_id)
                 ]
             )
             query_job = self.client.query(update_query, job_config=job_config)
