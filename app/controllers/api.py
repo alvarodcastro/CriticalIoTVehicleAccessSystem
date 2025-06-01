@@ -2,8 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_login import login_required
 from ..database.models import Vehicle, AccessLog, Gate
 from datetime import datetime
-# import cv2
-# import numpy as np
+import cv2
+import numpy as np
 # from ..anpr import detect_and_recognize
 from ..mqtt_handler import mqtt_client as mqtt
 from .. import db
@@ -25,25 +25,25 @@ api_bp = Blueprint('api', __name__)
 #     img_array = np.frombuffer(image_file.read(), np.uint8)
 #     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
     
-    # Use ANPR to detect plate
-    processed_image, plate_text, confidence = detect_and_recognize(img)
-      # Check if vehicle is authorized
-    vehicle_data = db.get_vehicle_by_plate(plate_text)
-    is_authorized = False
+#     # Use ANPR to detect plate
+#     processed_image, plate_text, confidence = detect_and_recognize(img)
+#       # Check if vehicle is authorized
+#     vehicle_data = db.get_vehicle_by_plate(plate_text)
+#     is_authorized = False
     
-    if vehicle_data:
-        vehicle = Vehicle(vehicle_data)
-        if vehicle.is_authorized:
-            if vehicle.valid_until is None or vehicle.valid_until > datetime.utcnow():
-                is_authorized = True
+#     if vehicle_data:
+#         vehicle = Vehicle(vehicle_data)
+#         if vehicle.is_authorized:
+#             if vehicle.valid_until is None or vehicle.valid_until > datetime.utcnow():
+#                 is_authorized = True
     
-    # Log the access attempt
-    success = db.create_access_log(
-        plate_number=plate_text,
-        gate_id=gate_id,
-        access_granted=is_authorized,
-        confidence_score=confidence
-    )
+#     # Log the access attempt
+#     success = db.create_access_log(
+#         plate_number=plate_text,
+#         gate_id=gate_id,
+#         access_granted=is_authorized,
+#         confidence_score=confidence
+#     )
     
 #     return jsonify({
 #         'plate_number': plate_text,
@@ -51,6 +51,9 @@ api_bp = Blueprint('api', __name__)
 #         'confidence': confidence
 #     })
 
+# TODO: Probably will be a good idea to use a endpoint like this to
+# sync raspberry with bigquery. Thi endpoint will be called by
+# lambda function to be called periodically (e.g., every few minutes)
 @api_bp.route('/api/sync_vehicles')
 @login_required
 def sync_vehicles():

@@ -11,7 +11,7 @@ import os
 
 # Initialize models
 model = YOLO("./models/best.pt")
-ocr = PaddleOCR(use_angle_cls=True, lang="en")
+
 
 # Initialize Flask
 app = Flask(__name__)
@@ -62,8 +62,15 @@ def detect_and_recognize(image):
     confidence_score = 0.0
 
     # YOLO detection
-    results = model.predict(source=image, save=False)
-    detections = results[0].boxes.data
+    detections = []
+    try:
+        results = model.predict(source=image, save=False)
+        if not results or len(results) == 0 or len(results[0].boxes.data) == 0:
+            return original_image, detected_text, confidence_score
+        detections = results[0].boxes.data
+    except Exception as e:
+        print(f"Error during YOLO detection: {e}")
+        return original_image, detected_text, confidence_score
 
     if len(detections) == 0:
         return original_image, detected_text, confidence_score
@@ -74,10 +81,18 @@ def detect_and_recognize(image):
 
         # Extract plate region
         plate_image = image[y1:y2, x1:x2]
+        if plate_image.size == 0:
+            continue
 
         # OCR on plate region
-        ocr_result = ocr.ocr(plate_image, cls=True)
-        detected_text, confidence_score = extract_license_plate(ocr_result)
+        try:
+            ocr = PaddleOCR(use_angle_cls=True, lang="en")
+            ocr_result = ocr.ocr(plate_image, cls=True)
+            detected_text, confidence_score = extract_license_plate(ocr_result)
+        except Exception as e:
+            print(f"Error during OCR: {e}")
+            continue
+
 
         if detected_text != "No plate detected":
             # Draw bounding box and text
@@ -86,49 +101,6 @@ def detect_and_recognize(image):
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     return original_image, detected_text, confidence_score
-
-@app.route('/api/test', methods=['POST'])
-def detect():
-    img = request.files["image"].read()
-    pil_img = Image.open(io.BytesIO(img)).convert("RGB")  # Convert to PIL RGB
-    results = model(pil_img)
-    
-    res_img = results[0].plot()  # Image with detections
-    img_encoded = encode_image_pil(res_img)  # Convert to JPEG with PIL
-
-    return Response(response=img_encoded, status=200, mimetype="image/jpeg")
-
-@app.route('/api/test2', methods=['GET'])
-def detect_from_url():
-    image_url = request.args.get('image')
-    if not image_url:
-        return jsonify({"error": "URL image not provided"}), 400
-
-    try:
-        resp = urllib.request.urlopen(image_url)  # Download image
-        pil_img = Image.open(io.BytesIO(resp.read())).convert("RGB")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    results = model(pil_img)
-    res_img = results[0].plot()
-    img_encoded = encode_image_pil(res_img)
-
-    return Response(response=img_encoded, status=200, mimetype="image/jpeg")
-
-@app.route('/api/test3', methods=['POST'])
-def detect_from_binary():
-    try:
-        img = request.get_data()
-        pil_img = Image.open(io.BytesIO(img)).convert("RGB")
-    except Exception as e:
-        return jsonify({"error": f"Could not read image: {str(e)}"}), 400
-
-    results = model(pil_img)
-    res_img = results[0].plot()
-    img_encoded = encode_image_pil(res_img)
-
-    return Response(response=img_encoded, status=200, mimetype="image/jpeg")
 
 @app.route('/api/anpr', methods=['POST'])
 def anpr_detect():
@@ -177,14 +149,14 @@ def anpr_detect_from_url():
         processed_image, plate_text, confidence = detect_and_recognize(pil_img)
         
         # Encode the processed image
-        img_encoded = encode_image_pil(processed_image)
+        # img_encoded = encode_image_pil(processed_image)
         
-        return Response(response=img_encoded, status=200, mimetype="image/jpeg")
+        # return Response(response=img_encoded, status=200, mimetype="image/jpeg")
 
         return jsonify({
             'plate_text': plate_text,
             'confidence': float(confidence),
-            'image': img_encoded.decode('latin1')
+            # 'image': img_encoded.decode('latin1')
         })
 
     except Exception as e:
