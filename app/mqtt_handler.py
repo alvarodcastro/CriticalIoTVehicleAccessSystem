@@ -141,8 +141,6 @@ def handle_gate_status(gate_id, payload):
     """Handle gate status updates"""
     with mqtt_client.app.app_context():
         gate = db.get_gate(gate_id)
-        print(payload.get('status', 'offline'))
-        print(f"Gate {gate}")
         if gate:
             success = db.update_gate_status(
                 gate_id=gate_id,
@@ -150,7 +148,7 @@ def handle_gate_status(gate_id, payload):
                 last_online=datetime.utcnow()
             )
             if success:
-                print(f"Gate {gate_id} status updated successfully")
+                print(f"Gate {gate_id} status updated successfully. Status: {payload.get('status', 'offline')}")
             else:
                 print(f"Failed to update gate {gate_id} status")
         else: 
