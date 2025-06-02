@@ -244,8 +244,9 @@ def handle_gate_sync(gate_id, payload):
                 sync_info = db.get_sync_info()
                 last_sync = sqlite.get_vehicle_last_sync_time()
 
-                dt = datetime.fromisoformat(last_sync)
-                last_sync = dt.replace(tzinfo=None)
+                if last_sync is not None:
+                    dt = datetime.fromisoformat(last_sync)
+                    last_sync = dt.replace(tzinfo=None)
 
                 sync_version = sync_info['sync_version']
 
@@ -254,7 +255,7 @@ def handle_gate_sync(gate_id, payload):
                 vehicle_list = []
                 for v in vehicles_data:
                     # Si el vehículo nunca fue sincronizado o fue sincronizado antes del último sync global
-                    if v.last_sync is None or (last_sync and last_sync < v.last_sync):
+                    if last_sync is None or (last_sync and last_sync < v.last_sync):
                         vehicle_list.append({
                             'plate_number': Vehicle(v).plate_number,
                             'owner_name': Vehicle(v).owner_name,
