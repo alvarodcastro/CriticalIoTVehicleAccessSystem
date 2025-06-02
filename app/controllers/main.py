@@ -160,3 +160,8 @@ def sync_gate(gate_id):
     if db.sync_gate(gate_id):
         return jsonify({'status': 'success'})
     return jsonify({'status': 'error'}), 500
+
+@main_bp.route('/looker-reports')
+@login_required
+def looker_studio_reports():
+    return render_template('main/looker_reports.html')

@@ -40,7 +40,6 @@ def create_app():
         from .mqtt_handler import init_mqtt
         from .controllers.auth import auth_bp
         from .controllers.main import main_bp
-        from .controllers.api import api_bp
         
         # Initialize MQTT after database is ready
         init_mqtt(app)
@@ -48,7 +47,6 @@ def create_app():
         # Register blueprints
         app.register_blueprint(auth_bp)
         app.register_blueprint(main_bp)
-        app.register_blueprint(api_bp)
 
         # Create admin user if needed
         create_admin_if_not_exists(app)

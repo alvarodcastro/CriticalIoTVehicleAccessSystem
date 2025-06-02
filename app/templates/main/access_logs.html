@@ -1,6 +1,23 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    .sorting-btns {
+        width: 25px;
+        height: 25px;
+    }
+
+    .sorting-btns button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .vertical-middle {
+        vertical-align: middle;
+    }
+</style>
+
 <h2>Access Logs</h2>
 
 <div class="card mt-4">
@@ -21,7 +38,7 @@
                     <tr>
                         <th>
                             Timestamp
-                            <div class="btn-group btn-group-sm ms-2">
+                            <div class="btn-group btn-group-sm ms-2 sorting-btns">
                                 <button onclick="updateParams('sort', 'timestamp', 'asc')"
                                     class="btn btn-outline-primary btn-sm {% if request.args.get('sort') == 'timestamp' and request.args.get('order') == 'asc' %}active{% endif %}">
                                     ↑
@@ -32,11 +49,11 @@
                                 </button>
                             </div>
                         </th>
-                        <th>Plate Number</th>
-                        <th>Gate</th>
+                        <th class="vertical-middle">Plate Number</th>
+                        <th class="vertical-middle">Gate</th>
                         <th>
                             Access
-                            <div class="btn-group btn-group-sm ms-2">
+                            <div class="btn-group btn-group-sm ms-2 sorting-btns">
                                 <button onclick="updateParams('sort', 'access_granted', 'asc')"
                                     class="btn btn-outline-primary btn-sm {% if request.args.get('sort') == 'access_granted' and request.args.get('order') == 'asc' %}active{% endif %}">
                                     ↑
@@ -47,8 +64,8 @@
                                 </button>
                             </div>
                         </th>
-                        <th>Confidence Score</th>
-                        <th>Image</th>
+                        <th class="vertical-middle">Confidence Score</th>
+                        <th class="vertical-middle">Image</th>
                     </tr>
                 </thead>
                 <tbody>

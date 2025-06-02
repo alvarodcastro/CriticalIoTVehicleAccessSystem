@@ -61,7 +61,7 @@ class BigQueryDB:
             'username': username,
             'password': str(password_hash),
             'is_admin': is_admin,
-            'created_at': datetime.utcnow().isoformat()
+            'created_at': datetime.now().isoformat()
         }]
 
         errors = self.client.insert_rows_json(table_ref, rows_to_insert)
@@ -114,7 +114,7 @@ class BigQueryDB:
                 'is_authorized': is_authorized,
                 'valid_from': valid_from.isoformat(),
                 'valid_until': valid_until.isoformat() if valid_until else None,
-                'last_sync': datetime.utcnow().isoformat()
+                'last_sync': datetime.now().isoformat()
             }]
             
             errors = self.client.insert_rows_json(table_ref, rows_to_insert)
@@ -190,17 +190,20 @@ class BigQueryDB:
                 last = num
 
     # AccessLog operations
-    def create_access_log(self, plate_number, gate_id, access_granted, confidence_score=None):
+    def create_access_log(self, id, plate_number, gate_id, access_granted, confidence_score=None, timestamp=None):
         table_ref = self.get_table_ref('AccessLog')
+        
         rows_to_insert = [{
-            'id': str(uuid.uuid4()),
+            'id': id,
             'plate_number': plate_number,
             'gate_id': gate_id,
             'access_granted': access_granted,
             'confidence_score': confidence_score,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': timestamp if timestamp else datetime.now().isoformat()
         }]
+
         errors = self.client.insert_rows_json(table_ref, rows_to_insert)
+
         return len(errors) == 0
 
     def get_access_logs(self, gate_id=None, limit=100):
@@ -315,7 +318,7 @@ class BigQueryDB:
             """
             job_config = bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("local_cache_updated", "DATETIME", datetime.utcnow().isoformat()),
+                    bigquery.ScalarQueryParameter("local_cache_updated", "DATETIME", datetime.now().isoformat()),
                     bigquery.ScalarQueryParameter("gate_id", "STRING", gate_id)
                 ]
             )
@@ -344,7 +347,7 @@ class BigQueryDB:
                     bigquery.ScalarQueryParameter("is_authorized", "BOOL", is_authorized),
                     bigquery.ScalarQueryParameter("valid_from", "DATETIME", valid_from),
                     bigquery.ScalarQueryParameter("valid_until", "DATETIME", valid_until if valid_until else None),
-                    bigquery.ScalarQueryParameter("last_sync", "DATETIME", datetime.utcnow()),
+                    bigquery.ScalarQueryParameter("last_sync", "DATETIME", datetime.now().isoformat()),
                     bigquery.ScalarQueryParameter("plate_number", "STRING", plate_number)
                 ]
             )
@@ -400,4 +403,27 @@ class BigQueryDB:
                 'successful_attempts_today': 0,
                 'total_gates': 0,
                 'online_gates': 0
+            }
+
+    def get_sync_info(self):
+        """Get the current sync information for vehicles"""
+        try:
+            query = f"""
+            SELECT MAX(CAST(last_sync as STRING)) as max_sync,
+                   COUNT(*) as total_vehicles
+            FROM `{self.get_table_ref('Vehicle')}`
+            """
+            result = next(self.client.query(query).result())
+            
+            # Use the hash of last_sync and total vehicles as version
+            sync_version = hash(f"{result.max_sync}_{result.total_vehicles}") % 1000000
+            return {
+                'sync_version': sync_version,
+                'last_sync': result.max_sync
+            }
+        except Exception as e:
+            print(f"Error getting sync info: {e}")
+            return {
+                'sync_version': 0,
+                'last_sync': datetime.utcnow().isoformat()
             }

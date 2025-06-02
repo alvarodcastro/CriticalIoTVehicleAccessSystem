@@ -119,13 +119,14 @@ void mqtt_handle_message(char *topic, byte *payload, unsigned int length)
     if (error) 
       debug("ERROR", String(error.c_str()));
     else if (json.containsKey("access_granted") && json.containsKey("plate_number")) {
-      bool open_gate = json["access_granted"];
+      bool open_gate = bool(json["access_granted"]);
       String plate_number = String(json["plate_number"]);
-
-      debug("OPEN GATE VALUE", open_gate);
 
       if (open_gate) {
         debug("INFO", "Access granted to " + plate_number); 
+        digitalWrite(FLASH_PIN, HIGH);
+        delay(500);
+        digitalWrite(FLASH_PIN, LOW);
       } else {
         debug("INFO", "Access denied");
       }
@@ -295,8 +296,8 @@ void setup()
 
   // Camera Settings
   camera.aithinker();
-  camera.svga();        // VGA Resolution
-  camera.bestQuality(); // Best Quality JPEG
+  camera.qvga();        // VGA Resolution
+  camera.lowQuality(); // Best Quality JPEG
   camera.setBrightness(1);
   camera.setSaturation(0);
 
@@ -326,30 +327,32 @@ void setup()
   startWebServer();
 }
 
-void loop()
-{
+void loop() {
+  if (!mqtt_client.connected()) {
+    start_mqtt_connection();
+  }
   mqtt_client.loop();
   server.handleClient();
 
-  if (!camera.capture())
-  {
+  yield(); // evita que el watchdog resetee
+
+  if (!camera.capture()) {
     debug("ERROR", camera.getErrorMessage());
-    return;
-  }
-
-  if (!motion.update())
-  {
-    return;
-  }
-
-  if (motion.detect())
-  {
-    debug("INFO", "Motion detected! Taking a picture...");
-
-    digitalWrite(FLASH_PIN, HIGH);
     delay(100);
+    return;
+  }
+
+  if (!motion.update()) {
+    delay(10); // reduce carga
+    return;
+  }
+
+  if (motion.detect()) {
+    debug("INFO", "Motion detected!");
 
     sendPictureOverMQTT();
+
+    delay(100); 
 
     if (camera.capture())
     {
@@ -361,11 +364,9 @@ void loop()
       bool photoResponse = chat.sendPhoto();
       debug("TELEGRAM PHOTO", photoResponse ? "OK" : "ERR");
     }
-
-    digitalWrite(FLASH_PIN, LOW);
-  }
-  else if (!motion.isOk())
-  {
+  } else if (!motion.isOk()) {
     debug("ERROR", motion.getErrorMessage());
   }
+
+  delay(10); // para que el watchdog no se dispare
 }
