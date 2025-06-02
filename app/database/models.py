@@ -43,6 +43,13 @@ class Vehicle:
     
     def is_currently_valid(self):
         now = datetime.utcnow()
+        
+        if isinstance(self.valid_from, str):
+            self.valid_from = datetime.fromisoformat(self.valid_from)
+        
+        if self.valid_until and isinstance(self.valid_until, str):
+            self.valid_until = datetime.fromisoformat(self.valid_until)
+        
         if not self.is_authorized:
             return False
         if self.valid_until and now > self.valid_until:
@@ -137,7 +144,7 @@ class Pagination:
 @login_manager.user_loader
 def load_user(user_id):
     from .. import db
-    print(f"Loading user with ID: {user_id}")
+    
     try:
         result = db.get_user_by_id(user_id)
         if result:
