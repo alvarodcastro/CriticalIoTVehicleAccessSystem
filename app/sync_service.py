@@ -162,7 +162,8 @@ class SyncService:
                     'gate_id': log['gate_id'],
                     'access_granted': log['access_granted'],
                     'confidence_score': log['confidence_score'],
-                    'timestamp': log['timestamp']
+                    'timestamp': log['timestamp'],
+                    'accessing': log['accessing']
                 } for log in pending_logs]
             }
 

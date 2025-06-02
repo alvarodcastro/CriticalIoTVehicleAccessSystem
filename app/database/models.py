@@ -57,7 +57,8 @@ class Vehicle:
         return now >= self.valid_from
 
 class AccessLog:
-    def __init__(self, data=None, plate_number=None, gate_id=None, access_granted=None, confidence_score=None):
+    def __init__(self, data=None, plate_number=None, gate_id=None, 
+                 access_granted=None, confidence_score=None, accessing=False):
         if data:
             self.id = data['id'] if 'id' in data else None
             self.plate_number = data['plate_number']
@@ -66,6 +67,7 @@ class AccessLog:
             self.confidence_score = data.get('confidence_score')
             self.gate_id = data['gate_id']
             self.image_path = data.get('image_path')
+            self.accessing = data.get('accessing', False)
         else:
             self.id = None
             self.plate_number = plate_number
@@ -74,6 +76,7 @@ class AccessLog:
             self.confidence_score = confidence_score
             self.timestamp = datetime.utcnow()
             self.image_path = None
+            self.accessing = accessing
 
 class Gate:
     def __init__(self, data):

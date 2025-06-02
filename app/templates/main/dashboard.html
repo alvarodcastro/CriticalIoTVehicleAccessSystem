@@ -86,6 +86,7 @@
                                 <th>Gate</th>
                                 <th>Access</th>
                                 <th>Confidence</th>
+                                <th>Direction</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -101,6 +102,10 @@
                                     </span>
                                 </td>
                                 <td>{{ "%.2f"|format(log.confidence_score) }}</td>
+                                <td>
+                                    <span class="badge {% if log.accessing %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ 'In-parking' if log.accessing else 'Out-parking' }}
+                                    </span>
                             </tr>
                             {% endfor %}
                         </tbody>

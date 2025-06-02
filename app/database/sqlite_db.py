@@ -44,6 +44,7 @@ class SQLiteDB:
                 gate_id TEXT,
                 access_granted BOOLEAN,
                 confidence_score REAL,
+                accessing BOOLEAN DEFAULT FALSE,
                 sync_status TEXT DEFAULT 'pending',
                 retry_count INTEGER DEFAULT 0
             )''')
@@ -85,7 +86,20 @@ class SQLiteDB:
             result = cursor.fetchone()
             return result['last_sync'] if result else None
 
-
+    def is_vehicle_in_parking(self, plate_number):
+        """Check if a vehicle is currently in parking"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('''
+                SELECT * FROM pending_logs 
+                WHERE plate_number = ?
+                ORDER BY timestamp DESC
+            ''', (plate_number,))
+            vehicle = cursor.fetchone()
+            print("DEBUG: vehicle instance:", vehicle['timestamp'], vehicle['accessing'])  # Debugging line
+            accessing = vehicle['accessing'] if vehicle and vehicle['accessing'] else False
+            return accessing
+        
     def is_vehicle_authorized(self, plate_number):
         """Check if a vehicle is authorized"""
         with sqlite3.connect(self.db_path) as conn:
@@ -118,15 +132,15 @@ class SQLiteDB:
 
             return True
 
-    def create_access_log(self, plate_number, gate_id, access_granted, confidence_score=None):
+    def create_access_log(self, plate_number, gate_id, access_granted, accessing, confidence_score=None):
         """Create a new access log entry for later synchronization"""
         with sqlite3.connect(self.db_path) as conn:
             log_id = str(uuid.uuid4())
             now = datetime.now(TIMEZONE)
             conn.execute('''
-                INSERT INTO pending_logs (id, plate_number, gate_id, access_granted, confidence_score, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (log_id, plate_number, gate_id, access_granted, confidence_score, now.isoformat()))
+                INSERT INTO pending_logs (id, plate_number, gate_id, access_granted, confidence_score, timestamp, accessing)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (log_id, plate_number, gate_id, access_granted, confidence_score, now.isoformat(), accessing))
             return log_id
 
     def get_pending_logs(self, limit=50, max_retries=3):
