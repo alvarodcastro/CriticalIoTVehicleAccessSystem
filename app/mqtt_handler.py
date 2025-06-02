@@ -195,6 +195,7 @@ def handle_gate_access(gate_id, payload, url=None):
         print(f"Detected plate: {plate_text} with confidence: {confidence}")        
         # Check authorization
         is_authorized = False
+        accessing = False
         vehicle_row = sqlite.get_vehicle_by_plate_number(plate_text)
         vehicle_data = dict(vehicle_row) if vehicle_row else None
         print(f"Vehicle data for plate {plate_text}: {vehicle_data}")
@@ -202,13 +203,16 @@ def handle_gate_access(gate_id, payload, url=None):
             vehicle = Vehicle(vehicle_data)
             if vehicle.is_authorized and vehicle.is_currently_valid():
                 is_authorized = True
+                accessing = sqlite.is_vehicle_in_parking(vehicle.plate_number)
+                accessing = not accessing
 
-        # Log access attempt
+        # Log access attempt    
         success = sqlite.create_access_log(
             plate_number=plate_text,
             gate_id=gate_id,
             access_granted=is_authorized,
-            confidence_score=confidence
+            confidence_score=confidence,
+            accessing=accessing
         )
 
         # Send response back to gate
@@ -218,7 +222,9 @@ def handle_gate_access(gate_id, payload, url=None):
             'plate_number': plate_text,
             'access_granted': is_authorized,
             'confidence': confidence,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.utcnow().isoformat(),
+            'accessing': accessing
+
         }
         mqtt_client.publish(response_topic, json.dumps(response))
 

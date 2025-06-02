@@ -190,7 +190,7 @@ class BigQueryDB:
                 last = num
 
     # AccessLog operations
-    def create_access_log(self, id, plate_number, gate_id, access_granted, confidence_score=None, timestamp=None):
+    def create_access_log(self, id, plate_number, gate_id, access_granted, confidence_score=None, timestamp=None, accessing=False):
         table_ref = self.get_table_ref('AccessLog')
         
         rows_to_insert = [{
@@ -199,9 +199,10 @@ class BigQueryDB:
             'gate_id': gate_id,
             'access_granted': access_granted,
             'confidence_score': confidence_score,
-            'timestamp': timestamp if timestamp else datetime.now().isoformat()
+            'timestamp': timestamp if timestamp else datetime.now().isoformat(),
+            'accessing': True if accessing else False
         }]
-
+        # Insert the log 
         errors = self.client.insert_rows_json(table_ref, rows_to_insert)
 
         return len(errors) == 0

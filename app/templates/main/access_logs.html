@@ -65,7 +65,7 @@
                             </div>
                         </th>
                         <th class="vertical-middle">Confidence Score</th>
-                        <th class="vertical-middle">Image</th>
+                        <th class="vertical-middle">Direction</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,14 +81,9 @@
                         </td>
                         <td>{{ "%.2f"|format(log.confidence_score) if log.confidence_score else 'N/A' }}</td>
                         <td>
-                            {% if log.image_path %}
-                            <a href="{{ url_for('static', filename=log.image_path) }}" target="_blank">
-                                <img src="{{ url_for('static', filename=log.image_path) }}" alt="Detection Image"
-                                    style="max-height: 50px;">
-                            </a>
-                            {% else %}
-                            No image
-                            {% endif %}
+                            <span class="badge {% if log.accessing %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ 'In-parking' if log.accessing else 'Out-parking' }}
+                            </span>
                         </td>
                     </tr>
                     {% endfor %}
