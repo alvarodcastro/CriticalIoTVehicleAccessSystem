@@ -96,9 +96,12 @@ class SQLiteDB:
                 ORDER BY timestamp DESC
             ''', (plate_number,))
             vehicle = cursor.fetchone()
-            print("DEBUG: vehicle instance:", vehicle['timestamp'], vehicle['accessing'])  # Debugging line
-            accessing = vehicle['accessing'] if vehicle and vehicle['accessing'] else False
-            return accessing
+            if vehicle:
+                print("DEBUG: vehicle instance:", vehicle['timestamp'], vehicle['accessing'])  # Debugging line
+                accessing = vehicle['accessing'] if vehicle and vehicle['accessing'] else False
+                return accessing
+                
+            return False
         
     def is_vehicle_authorized(self, plate_number):
         """Check if a vehicle is authorized"""
@@ -135,8 +138,10 @@ class SQLiteDB:
     def create_access_log(self, plate_number, gate_id, access_granted, accessing, confidence_score=None):
         """Create a new access log entry for later synchronization"""
         with sqlite3.connect(self.db_path) as conn:
+            print(f"DEBUG: Creating access log for plate {plate_number}, gate {gate_id}, access_granted: {access_granted}, confidence_score: {confidence_score}, accessing: {accessing}")  # Debugging line
             log_id = str(uuid.uuid4())
             now = datetime.now(TIMEZONE)
+            print(f"DEBUG: Current timestamp for log: {now.isoformat()}")  # Debugging line
             conn.execute('''
                 INSERT INTO pending_logs (id, plate_number, gate_id, access_granted, confidence_score, timestamp, accessing)
                 VALUES (?, ?, ?, ?, ?, ?, ?)

@@ -56,6 +56,7 @@ class Vehicle:
         if self.valid_until is not None:
             return self.valid_from <= now <= self.valid_until
         else:
+            print("Valid until is None, checking only valid_from")
             return now >= self.valid_from
 
 class AccessLog:

@@ -202,6 +202,7 @@ def handle_gate_access(gate_id, payload, url=None):
         if vehicle_data:
             vehicle = Vehicle(vehicle_data)
             if vehicle.is_authorized and vehicle.is_currently_valid():
+                print(f"Vehicle {plate_text} is authorized and currently valid")
                 is_authorized = True
                 accessing = sqlite.is_vehicle_in_parking(vehicle.plate_number)
                 accessing = not accessing
@@ -214,6 +215,11 @@ def handle_gate_access(gate_id, payload, url=None):
             confidence_score=confidence,
             accessing=accessing
         )
+        if not success:
+            print(f"Failed to create access log for plate {plate_text} at gate {gate_id}")
+        else:
+            print(f"Access log created for plate {plate_text} at gate {gate_id}")
+        
 
         # Send response back to gate
         print(f"Sending response to gate {gate_id}: {is_authorized}")

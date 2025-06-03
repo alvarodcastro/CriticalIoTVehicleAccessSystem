@@ -15,8 +15,8 @@ TOPIC_GATE_ACCESS = "gate/1/access"
 TOPIC_GATE_SYNC = "gate/1/sync"
 TOPIC_SERVER_RESPONSE = "server/response/{gate_id}"
 
-USERNAME = "user"  # Replace with actual username
-PASSWORD = "user123"  # Replace with actual password
+USERNAME = "mqtt_iot2"  # Replace with actual username
+PASSWORD = "mah-iot2"  # Replace with actual password
 
 def test_yolo_api(image_url):
     """Test the YOLO API directly"""
