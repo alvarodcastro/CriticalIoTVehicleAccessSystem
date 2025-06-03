@@ -42,7 +42,7 @@ class Vehicle:
             self.last_sync = data['last_sync']
     
     def is_currently_valid(self):
-        now = datetime.utcnow()
+        now = datetime.now()
         
         if isinstance(self.valid_from, str):
             self.valid_from = datetime.fromisoformat(self.valid_from)
@@ -52,9 +52,11 @@ class Vehicle:
         
         if not self.is_authorized:
             return False
-        if self.valid_until and now > self.valid_until:
-            return False
-        return now >= self.valid_from
+
+        if self.valid_until is not None:
+            return self.valid_from <= now <= self.valid_until
+        else:
+            return now >= self.valid_from
 
 class AccessLog:
     def __init__(self, data=None, plate_number=None, gate_id=None, 
