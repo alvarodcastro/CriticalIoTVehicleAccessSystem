@@ -12,13 +12,10 @@
 
 // Telegram Settings
 #define BOT_TOKEN "7422198409:AAFH1EwZvidiSG6PASmMJjbsyOqx4_bLfsI"
-#define CHAT_ID 938197683
+#define CHAT_ID -1002650829766
 
 // Flash LED PIN
 #define FLASH_PIN 4
-
-// Webserver object
-WebServer server(80);
 
 // Motion detection
 EloquentSurveillance::Motion motion;
@@ -27,8 +24,8 @@ EloquentSurveillance::Motion motion;
 EloquentSurveillance::TelegramChat chat(BOT_TOKEN, CHAT_ID);
 
 // MQTT Client
-//#define MQTT_SERVER "192.168.50.1"
-#define MQTT_SERVER "192.168.1.133"
+#define MQTT_SERVER "192.168.50.1"
+//#define MQTT_SERVER "192.168.1.133"
 #define MQTT_USER "mqtt_iot2"
 #define MQTT_PASS "mah-iot2"
 
@@ -127,7 +124,13 @@ void mqtt_handle_message(char *topic, byte *payload, unsigned int length)
         digitalWrite(FLASH_PIN, HIGH);
         delay(500);
         digitalWrite(FLASH_PIN, LOW);
-      } else {
+
+        chat.sendMessage("Motion detected! Waiting for access confirmation...");
+        chat.sendMessage("Access granted to " + plate_number);
+        bool photoResponse = chat.sendPhoto();
+        debug("TELEGRAM PHOTO", photoResponse ? "ERR" : "OK");
+      } else if (plate_number != "No plate detected") {
+        chat.sendMessage("Access denied. Plate detected: " + plate_number);
         debug("INFO", "Access denied");
       }
     }
@@ -184,99 +187,6 @@ void sendPictureOverMQTT()
   debug("INFO", "Imagen enviada por MQTT en formato JSON correctamente.");
 }
 
-void startWebServer()
-{
-  server.on("/", HTTP_GET, []()
-            { server.send(200, "text/html",
-                          "<html><body><h1>ESP32-CAM</h1>"
-                          "<p>Usa <a href='/capture'>/capture</a> para capturar manualmente una imagen.</p>"
-                          "</body></html>"); });
-
-  server.on("/capture", HTTP_GET, []()
-            {
-    debug("INFO", "Petición manual de captura recibida");
-    captureAndSendImage(); });
-
-  server.begin();
-  debug("SUCCESS", "Servidor web iniciado en puerto 80");
-}
-
-void captureAndSendImage()
-{
-  digitalWrite(FLASH_PIN, HIGH);
-  delay(100);
-
-  if (!camera.capture())
-  {
-    debug("ERROR", camera.getErrorMessage());
-    digitalWrite(FLASH_PIN, LOW);
-    server.send(500, "text/plain", "Error al capturar la imagen");
-    return;
-  }
-
-  digitalWrite(FLASH_PIN, LOW);
-
-  uint8_t *buffer = camera.getBuffer();
-  size_t bufferSize = camera.getFileSize();
-
-  if (!buffer || bufferSize == 0)
-  {
-    debug("ERROR", "No se pudo obtener buffer de imagen");
-    server.send(500, "text/plain", "Error al obtener el buffer");
-    return;
-  }
-
-  server.sendHeader("Content-Disposition", "attachment; filename=\"captura.jpg\"");
-  server.send_P(200, "image/jpeg", (const char *)buffer, bufferSize);
-
-  debug("INFO", "Imagen enviada correctamente");
-}
-
-void scanNetworks()
-{
-  debug("INFO", "Escaneando redes WiFi disponibles...");
-
-  int n = WiFi.scanNetworks();
-  if (n == 0)
-  {
-    debug("INFO", "No se encontraron redes WiFi");
-  }
-  else
-  {
-    debug("INFO", String(n) + " redes encontradas:");
-    for (int i = 0; i < n; ++i)
-    {
-      String ssid = WiFi.SSID(i);
-      int rssi = WiFi.RSSI(i);
-      String encryptionType;
-      switch (WiFi.encryptionType(i))
-      {
-      case WIFI_AUTH_OPEN:
-        encryptionType = "Open";
-        break;
-      case WIFI_AUTH_WEP:
-        encryptionType = "WEP";
-        break;
-      case WIFI_AUTH_WPA_PSK:
-        encryptionType = "WPA/PSK";
-        break;
-      case WIFI_AUTH_WPA2_PSK:
-        encryptionType = "WPA2/PSK";
-        break;
-      case WIFI_AUTH_WPA_WPA2_PSK:
-        encryptionType = "WPA/WPA2/PSK";
-        break;
-      default:
-        encryptionType = "Unknown";
-        break;
-      }
-
-      debug("INFO", String(i + 1) + ": " + ssid + " (" + rssi + "dBm) [" + encryptionType + "]");
-      delay(10);
-    }
-  }
-}
-
 void build_topics(String device_mac) {
   TOPIC_STATUS = "gate/" + device_mac + "/status";
   TOPIC_SEND_PICTURE = "gate/" + device_mac + "/access";
@@ -313,8 +223,6 @@ void setup()
   motion.setMinPixelDiff(10);
   motion.setMinSizeDiff(0.05);
 
-  // scanNetworks();
-
   start_wifi_connection();
   DEVICE_ID = String(WiFi.getHostname());
   String device_mac = String(WiFi.macAddress());
@@ -323,8 +231,6 @@ void setup()
   mqtt_client.setBufferSize(51200);
   mqtt_client.setCallback(mqtt_handle_message);
   start_mqtt_connection();
-
-  startWebServer();
 }
 
 void loop() {
@@ -332,9 +238,8 @@ void loop() {
     start_mqtt_connection();
   }
   mqtt_client.loop();
-  server.handleClient();
 
-  yield(); // evita que el watchdog resetee
+  yield();
 
   if (!camera.capture()) {
     debug("ERROR", camera.getErrorMessage());
@@ -343,30 +248,23 @@ void loop() {
   }
 
   if (!motion.update()) {
-    delay(10); // reduce carga
+    delay(10);
     return;
   }
 
   if (motion.detect()) {
     debug("INFO", "Motion detected!");
 
-    sendPictureOverMQTT();
+    if (camera.capture()) {
+      debug("INFO", "Image captured successfully.");
+
+      sendPictureOverMQTT();
+    } else {
+      debug("ERROR", camera.getErrorMessage());
+    }
 
     delay(100); 
-
-    if (camera.capture())
-    {
-      debug("INFO", "Image taken successfully.");
-
-      bool messageResponse = chat.sendMessage("Motion Detected!");
-      debug("TELEGRAM MSG", messageResponse ? "OK" : "ERR");
-
-      bool photoResponse = chat.sendPhoto();
-      debug("TELEGRAM PHOTO", photoResponse ? "OK" : "ERR");
-    }
-  } else if (!motion.isOk()) {
-    debug("ERROR", motion.getErrorMessage());
   }
 
-  delay(10); // para que el watchdog no se dispare
+  delay(10);
 }
