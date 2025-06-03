@@ -243,7 +243,7 @@ def handle_gate_sync(gate_id, payload):
                 print(f"Processing sync request with version {payload.get('sync_version', 0)}")
                 
                 # Get all authorized vehicles from BigQuery
-                vehicles_data = db.get_authorized_vehicles()
+                vehicles_data = db.get_vehicles()
 
                 print(f"Found {len(vehicles_data)} authorized vehicles for sync")
 
