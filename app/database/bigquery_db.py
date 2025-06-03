@@ -77,10 +77,9 @@ class BigQueryDB:
         return result.count > 0
 
     # Vehicle operations
-    def get_authorized_vehicles(self):
+    def get_vehicles(self):
         query = f"""
         SELECT * FROM `{self.get_table_ref('Vehicle')}`
-        WHERE is_authorized = TRUE
         """
         return list(self.client.query(query).result())
 
