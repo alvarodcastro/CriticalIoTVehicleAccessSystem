@@ -203,7 +203,7 @@ def handle_gate_access(gate_id, payload, url=None):
             vehicle = Vehicle(vehicle_data)
             if vehicle.is_authorized and vehicle.is_currently_valid():
                 is_authorized = True
-                accessing = sqlite.is_vehicle_in_parking(vehicle["plate_number"]) 
+                accessing = sqlite.is_vehicle_in_parking(vehicle.plate_number) 
                 accessing = not accessing
 
         # Log access attempt    
