@@ -96,9 +96,14 @@ class SQLiteDB:
                 ORDER BY timestamp DESC
             ''', (plate_number,))
             vehicle = cursor.fetchone()
-            print("DEBUG: vehicle instance:", vehicle['timestamp'], vehicle['accessing'])  # Debugging line
-            accessing = vehicle['accessing'] if vehicle and vehicle['accessing'] else False
-            return accessing
+
+            if vehicle:
+                print("DEBUG: vehicle instance:", vehicle['timestamp'], vehicle['accessing'])  # Debugging line
+                accessing = vehicle['accessing'] if vehicle and vehicle['accessing'] else False
+
+                return accessing
+
+            return False
         
     def is_vehicle_authorized(self, plate_number):
         """Check if a vehicle is authorized"""
