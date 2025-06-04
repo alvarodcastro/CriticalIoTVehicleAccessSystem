@@ -35,11 +35,11 @@
                     </li>
                 </ul>
                 <ul class="navbar-nav ms-auto">
-                    {% if current_user.is_admin %}
+                    <!-- {% if current_user.is_admin %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('auth.create_user') }}">Create User</a>
                     </li>
-                    {% endif %}
+                    {% endif %} -->
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
                     </li>
