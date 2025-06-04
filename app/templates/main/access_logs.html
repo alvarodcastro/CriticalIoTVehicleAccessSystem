@@ -1,20 +1,71 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    .sorting-btns {
+        width: 25px;
+        height: 25px;
+    }
+
+    .sorting-btns button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .vertical-middle {
+        vertical-align: middle;
+    }
+</style>
+
 <h2>Access Logs</h2>
 
 <div class="card mt-4">
     <div class="card-body">
+        <!-- Controls -->
+        <div class="row justify-content-end align-items-center mb-3 mx-1">
+            <label for="per_page" class="form-label" style="width: 150px;">Items per page:</label>
+            <select id="per_page" class="form-select" style="width: 100px;" onchange="updateParams('per_page', this.value)">
+                <option value="10" {% if request.args.get('per_page', '10' )=='10' %}selected{% endif %}>10</option>
+                <option value="30" {% if request.args.get('per_page')=='30' %}selected{% endif %}>30</option>
+                <option value="50" {% if request.args.get('per_page')=='50' %}selected{% endif %}>50</option>
+            </select>
+        </div>
+
         <div class="table-responsive">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
-                        <th>Plate Number</th>
-                        <th>Gate</th>
-                        <th>Access</th>
-                        <th>Confidence Score</th>
-                        <th>Image</th>
+                        <th>
+                            Timestamp
+                            <div class="btn-group btn-group-sm ms-2 sorting-btns">
+                                <button onclick="updateParams('sort', 'timestamp', 'asc')"
+                                    class="btn btn-outline-primary btn-sm {% if request.args.get('sort') == 'timestamp' and request.args.get('order') == 'asc' %}active{% endif %}">
+                                    ↑
+                                </button>
+                                <button onclick="updateParams('sort', 'timestamp', 'desc')"
+                                    class="btn btn-outline-primary btn-sm {% if request.args.get('sort') == 'timestamp' and request.args.get('order') == 'desc' %}active{% endif %}">
+                                    ↓
+                                </button>
+                            </div>
+                        </th>
+                        <th class="vertical-middle">Plate Number</th>
+                        <th class="vertical-middle">Gate</th>
+                        <th>
+                            Access
+                            <div class="btn-group btn-group-sm ms-2 sorting-btns">
+                                <button onclick="updateParams('sort', 'access_granted', 'asc')"
+                                    class="btn btn-outline-primary btn-sm {% if request.args.get('sort') == 'access_granted' and request.args.get('order') == 'asc' %}active{% endif %}">
+                                    ↑
+                                </button>
+                                <button onclick="updateParams('sort', 'access_granted', 'desc')"
+                                    class="btn btn-outline-primary btn-sm {% if request.args.get('sort') == 'access_granted' and request.args.get('order') == 'desc' %}active{% endif %}">
+                                    ↓
+                                </button>
+                            </div>
+                        </th>
+                        <th class="vertical-middle">Confidence Score</th>
+                        <th class="vertical-middle">Direction</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -30,15 +81,9 @@
                         </td>
                         <td>{{ "%.2f"|format(log.confidence_score) if log.confidence_score else 'N/A' }}</td>
                         <td>
-                            {% if log.image_path %}
-                            <a href="{{ url_for('static', filename=log.image_path) }}" target="_blank">
-                                <img src="{{ url_for('static', filename=log.image_path) }}" 
-                                     alt="Detection Image" 
-                                     style="max-height: 50px;">
-                            </a>
-                            {% else %}
-                            No image
-                            {% endif %}
+                            <span class="badge {% if log.accessing %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ 'In-parking' if log.accessing else 'Out-parking' }}
+                            </span>
                         </td>
                     </tr>
                     {% endfor %}
@@ -46,12 +91,18 @@
             </table>
         </div>
 
+        <!-- Info text -->
+        <div class="text-muted text-center my-3">
+            Showing {{ logs.items|length }} items of {{ logs.total }} total entries
+        </div>
+
         <!-- Pagination -->
         <nav aria-label="Page navigation">
             <ul class="pagination justify-content-center">
                 {% if logs.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('main.access_logs', page=logs.prev_num) }}">Previous</a>
+                    <a class="page-link"
+                        href="{{ url_for('main.access_logs', page=logs.prev_num, per_page=request.args.get('per_page', 10), sort=request.args.get('sort', 'timestamp'), order=request.args.get('order', 'desc')) }}">Previous</a>
                 </li>
                 {% else %}
                 <li class="page-item disabled">
@@ -60,20 +111,23 @@
                 {% endif %}
 
                 {% for page_num in logs.iter_pages(left_edge=2, left_current=2, right_current=3, right_edge=2) %}
-                    {% if page_num %}
-                        <li class="page-item {% if page_num == logs.page %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('main.access_logs', page=page_num) }}">{{ page_num }}</a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    {% endif %}
+                {% if page_num %}
+                <li class="page-item {% if page_num == logs.page %}active{% endif %}">
+                    <a class="page-link"
+                        href="{{ url_for('main.access_logs', page=page_num, per_page=request.args.get('per_page', 10), sort=request.args.get('sort', 'timestamp'), order=request.args.get('order', 'desc')) }}">{{
+                        page_num }}</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
                 {% endfor %}
 
                 {% if logs.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('main.access_logs', page=logs.next_num) }}">Next</a>
+                    <a class="page-link"
+                        href="{{ url_for('main.access_logs', page=logs.next_num, per_page=request.args.get('per_page', 10), sort=request.args.get('sort', 'timestamp'), order=request.args.get('order', 'desc')) }}">Next</a>
                 </li>
                 {% else %}
                 <li class="page-item disabled">
@@ -84,4 +138,19 @@
         </nav>
     </div>
 </div>
+
+{% block scripts %}
+<script>
+    function updateParams(param, value, order = null) {
+        const url = new URL(window.location);
+        url.searchParams.set(param, value);
+        if (param === 'sort' && order) {
+            url.searchParams.set('order', order);
+        }
+        // Keep other params
+        url.searchParams.set('page', '1'); // Reset to first page on sort/per_page change
+        window.location = url;
+    }
+</script>
+{% endblock %}
 {% endblock %}
