@@ -6,11 +6,12 @@ An IoT-based access control system using Automatic Number Plate Recognition (ANP
 
 - Automatic Number Plate Recognition using YOLO and PaddleOCR
 - Web-based management interface
-- Real-time gate control with ESP32
+- Real-time gate control with ESP32-CAM
 - Offline operation capability
-- Access log tracking with image storage
+- Access log tracking
 - Multiple gate support
 - High availability design
+- Telegram notification of updates
 
 ## System Requirements
 
@@ -19,7 +20,7 @@ An IoT-based access control system using Automatic Number Plate Recognition (ANP
 - Raspberry Pi (or similar) for main server
 - Google Cloud Platform account with BigQuery enabled
 - Network connectivity (WiFi/Ethernet)
-- Camera with motion detection
+- Camera with motion detection or PIR
 
 ## Installation
 
@@ -37,7 +38,7 @@ pip install -r requirements.txt
 ```
 
 3. Set up the YOLO model:
-- Place your trained YOLO model (`best.pt`) in the `app/models` directory
+- Place your trained YOLO model (`best.pt`) in the `docker/yolo/models` directory
 - The model should be trained for license plate detection
 
 4. Configure Google Cloud credentials:
