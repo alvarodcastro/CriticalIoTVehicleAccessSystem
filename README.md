@@ -1,192 +1,210 @@
-# Access Control System with ANPR
+# Critical IoT Vehicle Access System
 
-An IoT-based access control system using Automatic Number Plate Recognition (ANPR) for vehicle access management in critical infrastructure.
+An IoT-based access control system using Automatic Number Plate Recognition (ANPR) for vehicle access management in critical infrastructure. The system uses containerized services for MQTT and ANPR processing.
 
 ## Features
 
 - Automatic Number Plate Recognition using YOLO and PaddleOCR
+- Containerized microservices architecture
 - Web-based management interface
 - Real-time gate control with ESP32-CAM
-- Offline operation capability
-- Access log tracking
+- Offline operation capability with local SQLite database
+- BigQuery integration for cloud storage and analytics
+- Access log tracking and synchronization
 - Multiple gate support
 - High availability design
-- Telegram notification of updates
+- Telegram notification system
 
-## System Requirements
+## System Architecture
 
+### Components
+1. **Web Application**
+   - Flask-based admin interface
+   - Vehicle and gate management
+   - Access log visualization
+   - Authentication system
+
+2. **MQTT Broker (Docker)**
+   - Handles communication between components
+   - Manages gate access requests
+   - Supports multiple concurrent connections
+
+3. **YOLO ANPR Service (Docker)**
+   - REST API for plate recognition
+   - Uses YOLO for plate detection
+   - PaddleOCR for text recognition
+
+4. **Gate Controller (ESP32-CAM)**
+   - Captures vehicle images
+   - Communicates with MQTT broker
+   - Controls gate mechanism
+
+5. **Database System**
+   - Local SQLite for offline operation
+   - Google BigQuery for cloud storage
+   - Automatic synchronization
+
+## Prerequisites
+
+- Docker and Docker Compose
 - Python 3.8+
 - ESP32 with camera module
-- Raspberry Pi (or similar) for main server
 - Google Cloud Platform account with BigQuery enabled
 - Network connectivity (WiFi/Ethernet)
-- Camera with motion detection or PIR
 
 ## Installation
 
 1. Clone the repository:
-```bash
+```powershell
 git clone <repository-url>
-cd ProyectoFinal
+cd CriticalIoTVehicleAccessSystem
 ```
 
-2. Create a virtual environment and install dependencies:
-```bash
+2. Set up Python environment:
+```powershell
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+.\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Set up the YOLO model:
-- Place your trained YOLO model (`best.pt`) in the `docker/yolo/models` directory
-- The model should be trained for license plate detection
+3. Configure Docker services:
 
-4. Configure Google Cloud credentials:
-- Create a new project in Google Cloud Console
-- Enable BigQuery API
-- Create a service account and download the JSON key file
-- Set the environment variable:
-  ```bash
-  export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account-key.json"
-  ```
+   a. MQTT Broker:
+   ```powershell
+   cd docker/mosquitto
+   docker-compose up -d
+   ```
 
-5. Set up BigQuery:
-- Create a new dataset in BigQuery
-- Update the BigQuery configuration in `app/config.py`:
-  ```python
-  BIGQUERY_PROJECT_ID = 'your-project-id'
-  BIGQUERY_DATASET = 'your-dataset-name'
-  ```
+   b. YOLO ANPR Service:
+   ```powershell
+   cd docker/yolo
+   docker-compose up -d
+   ```
 
-6. Configure the ESP32:
-- Upload the ESP32 code to your device
-- Update WiFi credentials and server URL in the ESP32 code
-- Connect the gate control mechanism to the specified pins
+4. Configure Google Cloud:
+- Create a project and enable BigQuery API
+- Download service account key to `iot2-final-project-credentials.json`
+- Update BigQuery configuration in environment variables
 
-## MQTT Broker Setup
-
-1. Install Mosquitto MQTT Broker:
-- Windows:
-  - Download and install from: https://mosquitto.org/download/
-  - Add Mosquitto to system PATH
-  - Create a password file:
-    ```
-    mosquitto_passwd -c C:\mosquitto\passwd mqtt_user
-    ```
-  - Edit C:\mosquitto\mosquitto.conf to add:
-    ```
-    listener 1883
-    allow_anonymous false
-    password_file C:\mosquitto\passwd
-    ```
-  - Start Mosquitto service:
-    ```
-    net start mosquitto
-    ```
-
-- Linux (Raspberry Pi):
-  ```bash
-  sudo apt-get update
-  sudo apt-get install -y mosquitto mosquitto-clients
-  sudo mosquitto_passwd -c /etc/mosquitto/passwd mqtt_user
-  ```
-  Edit /etc/mosquitto/conf.d/default.conf:
-  ```
-  listener 1883
-  allow_anonymous false
-  password_file /etc/mosquitto/passwd
-  ```
-  ```bash
-  sudo systemctl restart mosquitto
-  ```
-
-2. Test MQTT Connection:
-```bash
-# Subscribe to test topic
-mosquitto_sub -h localhost -p 1883 -u mqtt_user -P mqtt_password -t "test"
-
-# Publish to test topic (in another terminal)
-mosquitto_pub -h localhost -p 1883 -u mqtt_user -P mqtt_password -t "test" -m "hello"
-```
+5. Configure the ESP32:
+- Upload `esp32cam_code/captureImage.ino` to your device
+- Update WiFi and MQTT broker credentials
 
 ## Configuration
 
 1. Environment Variables:
 ```bash
-SECRET_KEY=your-secret-key
-DATABASE_URL=sqlite:///access_control.db
-DEBUG=False
+GOOGLE_APPLICATION_CREDENTIALS=iot2-final-project-credentials.json
+MQTT_BROKER_URL=localhost
+MQTT_BROKER_PORT=1883
+MQTT_USERNAME=user
+MQTT_PASSWORD=user123
+YOLO_API_URL=http://localhost:4000
 ```
 
-2. ESP32 Configuration (in esp32_code/main.py):
-- Update `WIFI_SSID` and `WIFI_PASSWORD`
-- Set `SERVER_URL` to your server's address
-- Adjust `GATE_ID` for each gate
+2. Docker Services Configuration:
+- MQTT Broker: `docker/mosquitto/config/mosquitto.conf`
+- YOLO Service: `docker/yolo/app.py`
 
 ## Usage
 
-1. Start the server:
-```bash
+1. Start all services:
+```powershell
+# Start MQTT Broker
+docker-compose -f docker/mosquitto/docker-compose.yml up -d
+
+# Start YOLO Service
+docker-compose -f docker/yolo/docker-compose.yml up -d
+
+# Start main application
 python main.py
 ```
 
 2. Access the web interface:
-- Open a browser and navigate to `http://localhost:5000`
-- Default admin credentials: 
-  - Username: admin
-  - Password: admin123 (change this in production)
+- Navigate to `http://localhost:5000`
+- Login with your credentials
 
-3. System Management:
-- Add/remove vehicles and manage access permissions
-- Monitor gate status and access logs
-- View ANPR detection results
-- Manage multiple gates
+## Testing
 
-## Security Considerations
+The system includes various test tools located in the `tests` directory:
 
-1. Change default admin password
-2. Use HTTPS in production
-3. Implement proper network security
-4. Regular system updates
-5. Monitor system logs
+1. MQTT Testing:
+```powershell
+# Test MQTT sending
+python tests/test_mqtt_send.py --mode mqtt
 
-## Offline Operation
+# Test YOLO API directly
+python tests/test_mqtt_send.py --mode api
 
-The system maintains operation during network outages:
-- ESP32 stores a local cache of authorized vehicles
-- Regular synchronization when online
-- Manual override capability
-- All operations are logged and synced when connection is restored
+# Test both
+python tests/test_mqtt_send.py --mode both
+```
 
-## Troubleshooting
+2. Log Synchronization Testing:
+```powershell
+python tests/test_log_sync.py
+```
 
-1. Gate Communication Issues:
-- Check network connectivity
-- Verify ESP32 status LED indicators
-- Check gate mechanism connections
-
-2. ANPR Problems:
-- Ensure proper camera positioning and lighting
-- Verify model is loaded correctly
-- Check debug images in static/debug_images
-
-3. Database Issues:
-- Check database connections
-- Verify file permissions
-- Review application logs
+See `tests/README.md` for detailed testing instructions.
 
 ## Development
 
-To run tests:
-```bash
-python -m pytest tests/
+### Project Structure
+```
+CriticalIoTVehicleAccessSystem/
+├── app/                    # Main application
+│   ├── controllers/       # Web interface controllers
+│   ├── database/         # Database handlers
+│   └── templates/        # Web interface templates
+├── docker/               # Containerized services
+│   ├── mosquitto/       # MQTT broker
+│   └── yolo/            # ANPR service
+├── esp32cam_code/       # ESP32-CAM firmware
+├── instance/            # Local databases
+└── tests/               # Testing tools
 ```
 
-## Contributing
+### Adding New Features
+1. Implement feature in appropriate module
+2. Add tests in `tests` directory
+3. Update documentation
+4. Test with both online and offline operation
 
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+## Troubleshooting
+
+1. MQTT Connection Issues:
+```powershell
+# Check MQTT broker logs
+docker logs mosquitto
+```
+
+2. YOLO API Issues:
+```powershell
+# Check YOLO service logs
+docker logs yolo-api
+```
+
+3. Database Issues:
+- Check `instance/access_control.db` permissions
+- Verify BigQuery credentials
+- Check sync service logs
+
+## Security Considerations
+
+1. Docker Security:
+- Use custom networks
+- Configure proper authentication
+- Regular security updates
+
+2. MQTT Security:
+- TLS encryption (optional)
+- Strong passwords
+- Access control lists
+
+3. Application Security:
+- HTTPS in production
+- Regular backups
+- Input validation
 
 ## License
 
