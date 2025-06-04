@@ -1,19 +1,34 @@
 # Critical IoT Vehicle Access System
 
-An IoT-based access control system using Automatic Number Plate Recognition (ANPR) for vehicle access management in critical infrastructure. The system uses containerized services for MQTT and ANPR processing.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Docker](https://img.shields.io/badge/docker-required-blue.svg)
+![ESP32](https://img.shields.io/badge/ESP32-compatible-green.svg)
 
-## Features
+A modern, containerized IoT solution for vehicle access control in critical infrastructure using Automatic Number Plate Recognition (ANPR). The system combines edge computing with ESP32-CAM devices, containerized YOLO-based ANPR processing, and a robust MQTT-based communication layer for reliable and secure access management.
 
-- Automatic Number Plate Recognition using YOLO and PaddleOCR
-- Containerized microservices architecture
-- Web-based management interface
-- Real-time gate control with ESP32-CAM
-- Offline operation capability with local SQLite database
-- BigQuery integration for cloud storage and analytics
-- Access log tracking and synchronization
-- Multiple gate support
-- High availability design
-- Telegram notification system
+## 🚀 Key Features
+
+- **Automated Gate Control**: Real-time vehicle detection and access management
+- **Containerized Architecture**: 
+  - YOLO-based ANPR service in Docker
+  - Mosquitto MQTT broker for reliable communication
+- **Hybrid Storage**:
+  - Local SQLite for offline resilience
+  - Google BigQuery for cloud analytics
+- **Edge Computing**: ESP32-CAM for image capture and local processing
+- **High Availability**: Offline operation capability with local caching
+- **Security**: Multi-layer authentication and access control
+- **Analytics**: Real-time monitoring and access pattern analysis
+
+## 🎯 Perfect For
+
+- Parking facilities
+- Industrial complexes
+- Residential communities
+- Security checkpoints
+- Corporate campuses
+- Logistics centers
 
 ## System Architecture
 
