@@ -193,18 +193,18 @@ CriticalIoTVehicleAccessSystem/
 docker logs mosquitto
 ```
 
-2. YOLO API Issues:
+2. YOLO API Issues: 
 ```powershell
 # Check YOLO service logs
 docker logs yolo-api
 ```
 
-3. Database Issues:
+3. Database Issues: 
 - Check `instance/access_control.db` permissions
 - Verify BigQuery credentials
 - Check sync service logs
 
-## Security Considerations
+## Security Considerations 
 
 1. Docker Security:
 - Use custom networks
