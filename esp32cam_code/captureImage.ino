@@ -7,12 +7,12 @@
 #include <base64.h>
 
 // WiFi Settings
-#define WIFI_SSID "ESP32_AP"
-#define WIFI_PASS "mah-iot2"
+#define WIFI_SSID "yourwifissid"
+#define WIFI_PASS "yourwifipass"
 
 // Telegram Settings
-#define BOT_TOKEN "7422198409:AAFH1EwZvidiSG6PASmMJjbsyOqx4_bLfsI"
-#define CHAT_ID -1002650829766
+#define BOT_TOKEN "yourbottoken"
+#define CHAT_ID yourchatid
 
 // Flash LED PIN
 #define FLASH_PIN 4
@@ -24,10 +24,9 @@ EloquentSurveillance::Motion motion;
 EloquentSurveillance::TelegramChat chat(BOT_TOKEN, CHAT_ID);
 
 // MQTT Client
-#define MQTT_SERVER "192.168.50.1"
-//#define MQTT_SERVER "192.168.1.133"
-#define MQTT_USER "mqtt_iot2"
-#define MQTT_PASS "mah-iot2"
+#define MQTT_SERVER "brokerip"
+#define MQTT_USER "mqttuser"
+#define MQTT_PASS "mqttpass"
 
 String DEVICE_ID;
 
