@@ -7,8 +7,12 @@ from typing import Dict, Tuple, List, Optional
 # Adjust as your network evolves.
 SENSOR_ID_RANGES: Dict[str, Tuple[int, int]] = {
 	"temperature": (0x030, 0x03F),
-	"air_quality": (0x040, 0x04F),
+	"air_quality": (0x500, 0x599),
+	"gas": (0x600, 0x699),
 	"humidity": (0x050, 0x05F),
+	"occupancy": (0x700, 0x799),
+	"barrier_state": (0x400, 0x499),
+	"barrier_command": (0x300, 0x399),
 }
 
 
@@ -91,8 +95,12 @@ class SerialCANReceiver:
 			parsed = self._parse_can_line(line)
 			if parsed is None:
 				# Not a CAN-formatted line, print as-is for visibility
-				print(f"[Serial] {line}")
-				continue
+				if line[:3] == "LED":
+					# Suppress noisy LED status lines
+					continue
+				else:
+					print(f"[Serial] {line}")
+					continue
 
 			can_id, dlc, data_bytes = parsed
 			category = self._categorize(can_id)
@@ -178,13 +186,17 @@ if __name__ == "__main__":
 	com_port = os.getenv("SERIAL_PORT", "COM3")
 	baud = int(os.getenv("SERIAL_BAUD", "115200"))
 	print("Starting Serial CAN logger. Press Ctrl+C to stop.")
+	rcv = None
 	try:
 		rcv = run_serial_can_logger(com_port, baud)
 		# Keep main thread alive while background thread runs
 		threading.Event().wait()
 	except KeyboardInterrupt:
-		print("Stopping...")
-		try:
-			rcv.stop()
-		except Exception:
-			pass
+		print("\n[Serial] Received Ctrl+C, stopping...")
+	finally:
+		if rcv is not None:
+			try:
+				rcv.stop()
+				print("[Serial] Connection closed successfully.")
+			except Exception as e:
+				print(f"[Serial] Error closing connection: {e}")
