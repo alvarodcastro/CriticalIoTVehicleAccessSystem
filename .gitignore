@@ -19,6 +19,8 @@ logs/
 .env.*
 .venv.*
 .venv
+venv/*/*
+venv/
 
 # Build outputs
 dist/

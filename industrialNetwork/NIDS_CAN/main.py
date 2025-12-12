@@ -21,8 +21,11 @@ class CANNetworkIDS:
         # Configuration for your sensor network
         self.sensor_ranges = {
             'temperature': (0x300, 0x399, 0, 120),      # CAN ID range, value range
-            'pressure': (0x400, 0x499, 0, 100),
-            'humidity': (0x500, 0x599, 0, 100),
+            "air_quality": (0x500, 0x599, 0, 700),
+            "gas": (0x600, 0x699, 0, 500),
+            "occupancy": (0x700, 0x799, 0, 1),
+            "barrier_state": (0x400, 0x499, 0, 1),
+            "barrier_command": (0x300, 0x399, 0, 1),
         }
         
         # Baseline statistics (learned during normal operation)
@@ -126,6 +129,9 @@ class CANNetworkIDS:
             if id_min <= can_id <= id_max:
                 # This is a sensor message
                 if msg.dlc >= 1:
+                    if msg.data is None or len(msg.data) == 0:
+                        anomalies.append(("invalid_data", "HIGH"))
+                        break
                     value = msg.data[0]
                     if not (val_min <= value <= val_max):
                         anomalies.append(("out_of_range", "HIGH"))
@@ -213,7 +219,7 @@ class CANNetworkIDS:
         """Handle detected anomaly"""
         self.anomaly_count += 1
         
-        print(f"\n⚠️  ANOMALY DETECTED [#{self.anomaly_count}]")
+        print(f"\nANOMALY DETECTED [#{self.anomaly_count}]")
         print(f"   Severity: {severity}")
         print(f"   Type: {anom_type}")
         print(f"   CAN ID: 0x{msg.arbitration_id:03X}")
