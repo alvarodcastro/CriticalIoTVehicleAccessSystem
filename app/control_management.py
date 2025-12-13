@@ -57,6 +57,10 @@ class SerialCANReceiver:
 		self._ser: Optional[object] = None
 		# Track state for boolean sensors to avoid redundant publishing
 		self._sensor_states: Dict[int, bool] = {}
+		
+		# Configure MQTT callback if client is provided
+		if self.mqtt_client:
+			self.mqtt_client.on_message = self._on_mqtt_message
 
 		# Precompile regexes for performance and flexibility
 		# Matches ID=0x123 or ID: 291 or ID 0x123
@@ -80,6 +84,11 @@ class SerialCANReceiver:
 		self._thread = threading.Thread(target=self._run, name="SerialCANReceiver", daemon=True)
 		self._thread.start()
 		print(f"[Serial] Listening on {self.port} @ {self.baudrate} baud")
+		
+		# Subscribe to actuator commands if MQTT client is configured
+		if self.mqtt_client:
+			self.mqtt_client.subscribe("gate/+/actuators")
+			print("[MQTT] Subscribed to gate/+/actuators")
 
 	def stop(self) -> None:
 		self._stop_evt.set()
@@ -176,6 +185,70 @@ class SerialCANReceiver:
 				return name
 		return "unknown"
 
+	def _send_can_message(self, can_id: int, data_bytes: List[int]) -> None:
+		"""Send a CAN message over serial."""
+		if not self._ser:
+			print("[Serial] Cannot send: serial port not open")
+			return
+		
+		try:
+			dlc = len(data_bytes)
+			data_hex = " ".join(f"{b:02X}" for b in data_bytes)
+			# Format: ID=0x200 DLC=1 DATA=01
+			message = f"ID=0x{can_id:03X} DLC={dlc} DATA={data_hex}\n"
+			self._ser.write(message.encode())
+			print(f"[Serial] Sent CAN message: {message.strip()}")
+		except Exception as exc:
+			print(f"[Serial] Send error: {exc}")
+
+	def _on_mqtt_message(self, client, userdata, msg) -> None:
+		"""Handle incoming MQTT messages for actuator commands."""
+		try:
+			topic = msg.topic
+			payload = json.loads(msg.payload.decode())
+			
+			# Extract gate_id from topic gate/{gate_id}/actuators
+			parts = topic.split("/")
+			if len(parts) != 3 or parts[0] != "gate" or parts[2] != "actuators":
+				print(f"[MQTT] Invalid topic format: {topic}")
+				return
+			
+			gate_id = int(parts[1])
+			
+			# Check if payload contains barrierCommand
+			if "barrierCommand" not in payload:
+				print(f"[MQTT] No barrierCommand in payload: {payload}")
+				return
+			
+			command = payload["barrierCommand"]
+			if not isinstance(command, bool):
+				print(f"[MQTT] barrierCommand must be boolean, got: {type(command)}")
+				return
+			
+			# Calculate CAN ID from gate_id and barrierCommand range
+			lo, hi = self.sensor_id_ranges.get("barrierCommand", (0, 0))
+			can_id = lo + gate_id
+			
+			# Validate CAN ID is within range
+			if can_id < lo or can_id > hi:
+				print(f"[MQTT] Gate ID {gate_id} results in CAN ID 0x{can_id:03X} outside barrierCommand range")
+				return
+			
+			# Convert boolean to data byte: True -> 0x01, False -> 0x00
+			data_byte = 0x01 if command else 0x00
+			
+			print(f"[MQTT] Received barrier command: gate_id={gate_id}, command={command}, CAN_ID=0x{can_id:03X}")
+			
+			# Send CAN message over serial
+			self._send_can_message(can_id, [data_byte])
+			
+		except json.JSONDecodeError as exc:
+			print(f"[MQTT] JSON decode error: {exc}")
+		except ValueError as exc:
+			print(f"[MQTT] Value error: {exc}")
+		except Exception as exc:
+			print(f"[MQTT] Message handling error: {exc}")
+
 	def _publish_to_mqtt(self, can_id: int, category: str, data_bytes: List[int]) -> None:
 		"""Publish CAN message to MQTT topic gate/{system_id}/sensors."""
 		try:
@@ -195,6 +268,9 @@ class SerialCANReceiver:
 					return
 				# Update stored state
 				self._sensor_states[can_id] = data_value
+				payload = {
+					category: {can_id: data_value}
+			}
 			# For airQuality and gas sensors, convert hex bytes to integer
 			elif category == "airQuality" or category == "gas":
 				# Combine bytes into a single integer (big-endian)
@@ -202,12 +278,16 @@ class SerialCANReceiver:
 				if category == "gas":
 					# Example conversion for gas sensor
 					data_value = float(data_value)/100
+				payload = {
+					category: data_value
+				}
 			else:
 				data_value = data_hex
-			
-			payload = {
+				payload = {
 				category: data_value
-			}
+				}	
+			
+			
 
 			# Publish to topic
 			topic = f"gate/{system_id}/sensors"
