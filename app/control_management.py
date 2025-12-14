@@ -265,7 +265,7 @@ class SerialCANReceiver:
 			data_hex = " ".join(f"{b:02X}" for b in data_bytes)
 			
 			# For boolean sensors, convert to true/false
-			if category == "isSlotOccupied" or category == "isBarrierOpen":
+			if category == "isSlotOccupied":
 				data_value = (data_hex == "01")
 				# Check if state has changed
 				if can_id in self._sensor_states and self._sensor_states[can_id] == data_value:
@@ -274,8 +274,19 @@ class SerialCANReceiver:
 				# Update stored state
 				self._sensor_states[can_id] = data_value
 				payload = {
-					category: {can_id: data_value}
+					category: {f"{can_id:03X}": data_value}
 			}
+			elif category == "isBarrierOpen":
+				data_value = (data_hex == "01")
+				# Check if state has changed
+				if can_id in self._sensor_states and self._sensor_states[can_id] == data_value:
+					# State unchanged, skip publishing
+					return
+				# Update stored state
+				self._sensor_states[can_id] = data_value
+				payload = {
+					category: data_value
+				}
 			# For airQuality and gas sensors, convert hex bytes to integer
 			elif category == "airQuality" or category == "gas":
 				# Combine bytes into a single integer (big-endian)
