@@ -23,6 +23,8 @@ TOPIC_GATE_ACCESS = "gate/+/access"
 TOPIC_GATE_SYNC = "gate/+/sync"
 TOPIC_SERVER_RESPONSE = "server/response/{gate_id}"
 
+TOPIC_BARRIER_COMMAND = "gate/{gate_id}/actuators"
+
 TOPIC_GATE_SYNC_REQUEST = "gate/+/sync/request"
 TOPIC_GATE_SYNC_RESPONSE = "gate/{gate_id}/sync/response"
 TOPIC_GATE_SYNC_LOGS = "gate/+/sync/logs"
@@ -224,9 +226,16 @@ def handle_gate_access(gate_id, payload, url=None):
             'confidence': confidence,
             'timestamp': datetime.utcnow().isoformat(),
             'accessing': accessing
-
         }
         mqtt_client.publish(response_topic, json.dumps(response))
+
+        print("Sent access response to gate")
+        response_topic_command = TOPIC_BARRIER_COMMAND.format(gate_id=gate_id)
+        command_payload = {"barrierCommand": is_authorized}
+        command_payload_json = json.dumps(command_payload)
+        result = mqtt_client.publish(response_topic_command, command_payload_json)
+        print(f"Sent to {response_topic_command}: {command_payload_json}")
+        print(f"Result: {result.rc}")
 
 def handle_gate_sync(gate_id, payload):
     """Handle gate synchronization requests"""
