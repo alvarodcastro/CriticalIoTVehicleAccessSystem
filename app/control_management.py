@@ -192,11 +192,12 @@ class SerialCANReceiver:
 			return
 		
 		try:
-			dlc = len(data_bytes)
-			data_hex = " ".join(f"{b:02X}" for b in data_bytes)
-			# Format: ID=0x200 DLC=1 DATA=01
-			message = f"ID=0x{can_id:03X} DLC={dlc} DATA={data_hex}\n"
-			self._ser.write(message.encode())
+			# Required format: TX <ID> <DATA>\r\n
+			# ID is sent in decimal as per example `TX 201 1E`.
+			# DATA is hex with uppercase, concatenated if multiple bytes.
+			data_hex_concat = "".join(f"{b:02X}" for b in data_bytes) if data_bytes else ""
+			message = f"TX {can_id} {data_hex_concat}\r\n"
+			self._ser.write(message.encode('ascii'))
 			print(f"[Serial] Sent CAN message: {message.strip()}")
 		except Exception as exc:
 			print(f"[Serial] Send error: {exc}")
@@ -321,7 +322,7 @@ if __name__ == "__main__":
 	#   ID=0x036 DLC=2 DATA=00 FF
 	#   ID: 54 DLC: 8 DATA: AA BB CC DD EE FF 00 11
 	import os
-	com_port = os.getenv("SERIAL_PORT", "COM3")
+	com_port = os.getenv("SERIAL_PORT", "COM8")
 	baud = int(os.getenv("SERIAL_BAUD", "115200"))
 
 	client = mqtt.Client()
