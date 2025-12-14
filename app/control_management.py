@@ -1,18 +1,25 @@
 import re
 import threading
+import json
 from typing import Dict, Tuple, List, Optional
 
+
+import paho.mqtt.client as mqtt
+
+BROKER = "localhost"  # Public test broker
+PORT = 1883
+
+USERNAME = "user"  # Replace with actual username
+PASSWORD = "user123"  # Replace with actual password
 
 # Default identifier ranges for sensor categories (inclusive)
 # Adjust as your network evolves.
 SENSOR_ID_RANGES: Dict[str, Tuple[int, int]] = {
-	"temperature": (0x030, 0x03F),
-	"air_quality": (0x500, 0x599),
+	"airQuality": (0x500, 0x599),
 	"gas": (0x600, 0x699),
-	"humidity": (0x050, 0x05F),
-	"occupancy": (0x700, 0x799),
-	"barrier_state": (0x400, 0x499),
-	"barrier_command": (0x300, 0x399),
+	"isSlotOccupied": (0x700, 0x799),
+	"barrierCommand": (0x200, 0x299),
+	"isBarrierOpen": (0x300, 0x399),
 }
 
 
@@ -36,16 +43,24 @@ class SerialCANReceiver:
 		baudrate: int = 115200,
 		timeout: float = 1.0,
 		sensor_id_ranges: Optional[Dict[str, Tuple[int, int]]] = None,
+		mqtt_client: Optional[object] = None,
 	) -> None:
 
 		self.port = port
 		self.baudrate = baudrate
 		self.timeout = timeout
 		self.sensor_id_ranges = sensor_id_ranges or SENSOR_ID_RANGES
+		self.mqtt_client = mqtt_client
 		self._stop_evt = threading.Event()
 		self._thread: Optional[threading.Thread] = None
 		# Use a generic type to avoid import-time typing issues if pyserial isn't installed yet
 		self._ser: Optional[object] = None
+		# Track state for boolean sensors to avoid redundant publishing
+		self._sensor_states: Dict[int, bool] = {}
+		
+		# Configure MQTT callback if client is provided
+		if self.mqtt_client:
+			self.mqtt_client.on_message = self._on_mqtt_message
 
 		# Precompile regexes for performance and flexibility
 		# Matches ID=0x123 or ID: 291 or ID 0x123
@@ -69,6 +84,11 @@ class SerialCANReceiver:
 		self._thread = threading.Thread(target=self._run, name="SerialCANReceiver", daemon=True)
 		self._thread.start()
 		print(f"[Serial] Listening on {self.port} @ {self.baudrate} baud")
+		
+		# Subscribe to actuator commands if MQTT client is configured
+		if self.mqtt_client:
+			self.mqtt_client.subscribe("gate/+/actuators")
+			print("[MQTT] Subscribed to gate/+/actuators")
 
 	def stop(self) -> None:
 		self._stop_evt.set()
@@ -109,6 +129,11 @@ class SerialCANReceiver:
 			print(
 				f"[CAN] ID={id_str} category={category} DLC={dlc} DATA=[{data_hex}]"
 			)
+
+			# Publish to MQTT if client is configured
+			if self.mqtt_client and category != "unknown":
+				# print(f"[MQTT] Publishing CAN ID={id_str} to MQTT")
+				self._publish_to_mqtt(can_id, category, data_bytes)
 
 	def _parse_can_line(self, line: str) -> Optional[Tuple[int, int, List[int]]]:
 		"""Attempt to parse a CAN line into (id, dlc, data_bytes)."""
@@ -160,18 +185,131 @@ class SerialCANReceiver:
 				return name
 		return "unknown"
 
+	def _send_can_message(self, can_id: int, data_bytes: List[int]) -> None:
+		"""Send a CAN message over serial."""
+		if not self._ser:
+			print("[Serial] Cannot send: serial port not open")
+			return
+		
+		try:
+			dlc = len(data_bytes)
+			data_hex = " ".join(f"{b:02X}" for b in data_bytes)
+			# Format: ID=0x200 DLC=1 DATA=01
+			message = f"ID=0x{can_id:03X} DLC={dlc} DATA={data_hex}\n"
+			self._ser.write(message.encode())
+			print(f"[Serial] Sent CAN message: {message.strip()}")
+		except Exception as exc:
+			print(f"[Serial] Send error: {exc}")
+
+	def _on_mqtt_message(self, client, userdata, msg) -> None:
+		"""Handle incoming MQTT messages for actuator commands."""
+		try:
+			topic = msg.topic
+			payload = json.loads(msg.payload.decode())
+			
+			# Extract gate_id from topic gate/{gate_id}/actuators
+			parts = topic.split("/")
+			if len(parts) != 3 or parts[0] != "gate" or parts[2] != "actuators":
+				print(f"[MQTT] Invalid topic format: {topic}")
+				return
+			
+			gate_id = int(parts[1])
+			
+			# Check if payload contains barrierCommand
+			if "barrierCommand" not in payload:
+				print(f"[MQTT] No barrierCommand in payload: {payload}")
+				return
+			
+			command = payload["barrierCommand"]
+			if not isinstance(command, bool):
+				print(f"[MQTT] barrierCommand must be boolean, got: {type(command)}")
+				return
+			
+			# Calculate CAN ID from gate_id and barrierCommand range
+			lo, hi = self.sensor_id_ranges.get("barrierCommand", (0, 0))
+			can_id = lo + gate_id
+			
+			# Validate CAN ID is within range
+			if can_id < lo or can_id > hi:
+				print(f"[MQTT] Gate ID {gate_id} results in CAN ID 0x{can_id:03X} outside barrierCommand range")
+				return
+			
+			# Convert boolean to data byte: True -> 0x01, False -> 0x00
+			data_byte = 0x01 if command else 0x00
+			
+			print(f"[MQTT] Received barrier command: gate_id={gate_id}, command={command}, CAN_ID=0x{can_id:03X}")
+			
+			# Send CAN message over serial
+			self._send_can_message(can_id, [data_byte])
+			
+		except json.JSONDecodeError as exc:
+			print(f"[MQTT] JSON decode error: {exc}")
+		except ValueError as exc:
+			print(f"[MQTT] Value error: {exc}")
+		except Exception as exc:
+			print(f"[MQTT] Message handling error: {exc}")
+
+	def _publish_to_mqtt(self, can_id: int, category: str, data_bytes: List[int]) -> None:
+		"""Publish CAN message to MQTT topic gate/{system_id}/sensors."""
+		try:
+			# Calculate system_id by subtracting the lower bound of the category range
+			lo, hi = self.sensor_id_ranges.get(category, (0, 0))
+			system_id = can_id - lo
+
+			# Create JSON payload with sensor category as key and data as value
+			data_hex = " ".join(f"{b:02X}" for b in data_bytes)
+			
+			# For boolean sensors, convert to true/false
+			if category == "isSlotOccupied" or category == "isBarrierOpen":
+				data_value = (data_hex == "01")
+				# Check if state has changed
+				if can_id in self._sensor_states and self._sensor_states[can_id] == data_value:
+					# State unchanged, skip publishing
+					return
+				# Update stored state
+				self._sensor_states[can_id] = data_value
+				payload = {
+					category: {can_id: data_value}
+			}
+			# For airQuality and gas sensors, convert hex bytes to integer
+			elif category == "airQuality" or category == "gas":
+				# Combine bytes into a single integer (big-endian)
+				data_value = int("".join(f"{b:02X}" for b in data_bytes), 16) if data_bytes else 0
+				if category == "gas":
+					# Example conversion for gas sensor
+					data_value = float(data_value)/100
+				payload = {
+					category: data_value
+				}
+			else:
+				data_value = data_hex
+				payload = {
+				category: data_value
+				}	
+			
+			
+
+			# Publish to topic
+			topic = f"gate/{system_id}/sensors"
+			payload_json = json.dumps(payload)
+			self.mqtt_client.publish(topic, payload_json)
+			print(f"[MQTT] Published to {topic}: {payload_json}")
+		except Exception as exc:
+			print(f"[MQTT] Publish error: {exc}")
+
 
 def run_serial_can_logger(
 	port: str,
 	baudrate: int = 115200,
 	sensor_id_ranges: Optional[Dict[str, Tuple[int, int]]] = None,
+	mqtt_client: Optional[object] = None,
 ) -> SerialCANReceiver:
 	"""Convenience runner: starts a background receiver that prints to terminal.
 
 	Returns the receiver instance so callers can stop it later.
 	"""
 	receiver = SerialCANReceiver(
-		port=port, baudrate=baudrate, sensor_id_ranges=sensor_id_ranges
+		port=port, baudrate=baudrate, sensor_id_ranges=sensor_id_ranges, mqtt_client=mqtt_client
 	)
 	receiver.start()
 	return receiver
@@ -185,10 +323,22 @@ if __name__ == "__main__":
 	import os
 	com_port = os.getenv("SERIAL_PORT", "COM3")
 	baud = int(os.getenv("SERIAL_BAUD", "115200"))
+
+	client = mqtt.Client()
+	client.username_pw_set(USERNAME, PASSWORD)
+
+	try:
+		client.connect(BROKER, PORT, 60)
+		client.loop_start()
+		print("[MQTT] Connected to broker")
+	except Exception as e:
+		print(f"[MQTT] Connection error: {e}")
+		client = None
+
 	print("Starting Serial CAN logger. Press Ctrl+C to stop.")
 	rcv = None
 	try:
-		rcv = run_serial_can_logger(com_port, baud)
+		rcv = run_serial_can_logger(com_port, baud, mqtt_client=client)
 		# Keep main thread alive while background thread runs
 		threading.Event().wait()
 	except KeyboardInterrupt:
