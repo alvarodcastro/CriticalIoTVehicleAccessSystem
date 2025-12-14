@@ -10,13 +10,25 @@ from datetime import datetime
 from collections import defaultdict, deque
 import numpy as np
 import json
+import paho.mqtt.client as mqtt
 
 class CANNetworkIDS:
-    def __init__(self, channel='can0', bitrate=500000):
+    def __init__(self, channel='can0', bitrate=500000, mqtt_broker='localhost', mqtt_port=1883):
         """Initialize the network-based IDS"""
         self.bus = can.interface.Bus(channel=channel, 
                                      interface='socketcan',
                                      bitrate=bitrate)
+        
+        # Initialize MQTT client
+        self.mqtt_client = mqtt.Client()
+        self.mqtt_broker = mqtt_broker
+        self.mqtt_port = mqtt_port
+        try:
+            self.mqtt_client.connect(mqtt_broker, mqtt_port, 60)
+            self.mqtt_client.loop_start()
+            print(f"Connected to MQTT broker at {mqtt_broker}:{mqtt_port}")
+        except Exception as e:
+            print(f"Warning: Could not connect to MQTT broker: {e}")
         
         # Configuration for your sensor network
         self.sensor_ranges = {
@@ -245,8 +257,23 @@ class CANNetworkIDS:
         with open('intrusions.log', 'a') as f:
             f.write(f"{datetime.now().isoformat()}: {anom_type} on 0x{msg.arbitration_id:03X}\n")
         
-        # Option 2: Send to external monitoring system
-        # self._send_to_cloud(msg, anom_type)
+        # Option 2: Send to MQTT
+        alert_payload = {
+            "timestamp": datetime.now().isoformat(),
+            "anomaly_type": anom_type,
+            "can_id": f"0x{msg.arbitration_id:03X}",
+            "data": msg.data.hex(),
+            "dlc": msg.dlc
+        }
+        try:
+            self.mqtt_client.publish(
+                "ids/alerts",
+                json.dumps(alert_payload),
+                qos=1
+            )
+            print(f"   ACTION: Alert sent to MQTT topic 'ids/alerts'")
+        except Exception as e:
+            print(f"   ERROR: Could not send MQTT alert: {e}")
         
         # Option 3: Send alert via email/SMS
         # self._send_alert(msg, anom_type)
@@ -264,6 +291,8 @@ class CANNetworkIDS:
     
     def _cleanup(self):
         """Cleanup resources"""
+        self.mqtt_client.loop_stop()
+        self.mqtt_client.disconnect()
         self.conn.close()
         self.bus.shutdown()
 
