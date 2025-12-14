@@ -7,7 +7,7 @@ PORT = 1883
 USERNAME = "user"
 PASSWORD = "user123"
 
-TOPIC_ACTUATOR = "gate/2/actuators"
+TOPIC_ACTUATOR = "gate/1/actuators"
 
 def on_connect(client, userdata, flags, rc, properties=None):
     """Callback when client connects to broker"""
@@ -55,14 +55,17 @@ def main():
         send_barrier_command(client, 1, False)
         time.sleep(2)
         
-        # Additional tests with different gates
-        print("\n3. Opening barrier for gate 0...")
-        send_barrier_command(client, 0, True)
+        # Open barrier (gate 1)
+        print("\n1. Opening barrier for gate 1...")
+        send_barrier_command(client, 1, True)
         time.sleep(2)
         
-        print("\n4. Opening barrier for gate 5...")
-        send_barrier_command(client, 5, True)
+        # Close barrier (gate 1)
+        print("\n2. Closing barrier for gate 1...")
+        send_barrier_command(client, 1, False)
         time.sleep(2)
+        
+        
         
         print("\nAll test messages sent successfully!")
         

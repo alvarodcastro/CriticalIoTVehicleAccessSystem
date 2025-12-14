@@ -1,6 +1,7 @@
 import re
 import threading
 import json
+import time
 from typing import Dict, Tuple, List, Optional
 
 
@@ -196,8 +197,11 @@ class SerialCANReceiver:
 			# ID is sent in decimal as per example `TX 201 1E`.
 			# DATA is hex with uppercase, concatenated if multiple bytes.
 			data_hex_concat = "".join(f"{b:02X}" for b in data_bytes) if data_bytes else ""
-			message = f"TX {can_id} {data_hex_concat}\r\n"
-			self._ser.write(message.encode('ascii'))
+			message = f"TX {can_id:03X} {data_hex_concat}\r\n"
+			# Send the message 3 times for reliability
+			for _ in range(3):
+				self._ser.write(message.encode('ascii'))
+				time.sleep(0.2)  # brief pause between sends
 			print(f"[Serial] Sent CAN message: {message.strip()}")
 		except Exception as exc:
 			print(f"[Serial] Send error: {exc}")
@@ -322,7 +326,7 @@ if __name__ == "__main__":
 	#   ID=0x036 DLC=2 DATA=00 FF
 	#   ID: 54 DLC: 8 DATA: AA BB CC DD EE FF 00 11
 	import os
-	com_port = os.getenv("SERIAL_PORT", "COM8")
+	com_port = os.getenv("SERIAL_PORT", "COM3")
 	baud = int(os.getenv("SERIAL_BAUD", "115200"))
 
 	client = mqtt.Client()
