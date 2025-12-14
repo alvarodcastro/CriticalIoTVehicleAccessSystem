@@ -53,3 +53,7 @@ docker/mosquitto/config/pwfile
 
 # Results
 results*
+
+# Node-RED data
+docker/node-red-dashboard/node-red-data/*
+.node-red/
