@@ -264,7 +264,7 @@
         "type": "debug",
         "z": "6d4114a05924097a",
         "name": "debug 1",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -1067,7 +1067,9 @@
         "x": 610,
         "y": 120,
         "wires": [
-            []
+            [
+                "aae8b53c37790acc"
+            ]
         ]
     },
     {
@@ -1121,7 +1123,9 @@
         "x": 630,
         "y": 80,
         "wires": [
-            []
+            [
+                "aae8b53c37790acc"
+            ]
         ]
     },
     {
@@ -1155,5 +1159,67 @@
         "x": 870,
         "y": 160,
         "wires": []
+    },
+    {
+        "id": "aae8b53c37790acc",
+        "type": "ui-chart",
+        "z": "6d4114a05924097a",
+        "group": "6b6002d018d605e2",
+        "name": "",
+        "label": "chart",
+        "order": 9007199254740991,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "timestamp",
+        "xAxisType": "time",
+        "xAxisFormat": "",
+        "xAxisFormatType": "auto",
+        "xmin": "",
+        "xmax": "",
+        "yAxisLabel": "",
+        "yAxisProperty": "payload",
+        "yAxisPropertyType": "msg",
+        "ymin": "",
+        "ymax": "",
+        "bins": 10,
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 4,
+        "showLegend": true,
+        "removeOlder": 1,
+        "removeOlderUnit": "3600",
+        "removeOlderPoints": "",
+        "colors": [
+            "#0095ff",
+            "#ff0000",
+            "#ff7f0e",
+            "#2ca02c",
+            "#a347e1",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "textColor": [
+            "#666666"
+        ],
+        "textColorDefault": true,
+        "gridColor": [
+            "#e5e5e5"
+        ],
+        "gridColorDefault": true,
+        "width": 6,
+        "height": 8,
+        "className": "",
+        "interpolation": "linear",
+        "x": 810,
+        "y": 100,
+        "wires": [
+            []
+        ]
     }
 ]
